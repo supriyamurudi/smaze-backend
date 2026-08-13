@@ -1,0 +1,263 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODEL - UPDATED WITH GOOGLE ID
+// ============================================
+model User {
+  id String @id @default(uuid())
+
+  userNumber Int @unique @default(autoincrement())
+
+  name     String
+  email    String @unique
+  password String
+
+  phone   String?
+  image   String?
+  city    String?
+  address String?
+
+  // ✅ Add Google ID field
+  googleId String? @unique
+
+  notifyOffers      Boolean @default(true)
+  notifyExpiry      Boolean @default(true)
+  notifyShopUpdates Boolean @default(false)
+  notifyWhatsApp    Boolean @default(false)
+
+  preferredCategories String[]
+
+  role Role @default(CUSTOMER)
+
+  status    UserStatus @default(ACTIVE)
+  deletedAt DateTime?
+
+  shops         Shop[]
+  savedOffers   SavedOffer[]
+  notifications Notification[]
+  offerClaims   OfferClaim[]
+  offerViews    OfferView[]
+  whatsAppClicks WhatsAppChannelClick[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// SHOP MODEL - UPDATED WITH CITY AND APPROVAL FIELDS
+// ============================================
+model Shop {
+  id Int @id @default(autoincrement())
+
+  name    String
+  address String?
+  phone   String?
+  image   String?
+  description String?
+  city    String?   // ✅ ADDED: City field for shop location
+
+  latitude      Float?
+  longitude     Float?
+  googleMapLink String?
+
+  ownerId String
+  categoryId Int?
+
+  // ✅ Shop approval fields
+  status          String   @default("pending") // pending, active, rejected
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  approvedBy      String?   // Admin user ID who approved/rejected
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+  offers   Offer[]
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([categoryId])
+  @@index([city])  // ✅ ADDED: Index for faster city queries
+}
+
+// ============================================
+// CATEGORY MODEL
+// ============================================
+model Category {
+  id Int @id @default(autoincrement())
+
+  name  String  @unique
+  image String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offers Offer[]
+  shops  Shop[]
+}
+
+// ============================================
+// OFFER MODEL
+// ============================================
+model Offer {
+  id Int @id @default(autoincrement())
+
+  title       String
+  description String?
+  discount    Int
+  image       String?
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  views Int @default(0)
+
+  shopId     Int
+  categoryId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  claims      OfferClaim[]
+  savedOffers SavedOffer[]
+  offerViews  OfferView[]
+}
+
+// ============================================
+// SAVED OFFER MODEL
+// ============================================
+model SavedOffer {
+  id Int @id @default(autoincrement())
+
+  userId  String
+  offerId Int
+
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, offerId])
+}
+
+// ============================================
+// NOTIFICATION MODEL
+// ============================================
+model Notification {
+  id Int @id @default(autoincrement())
+
+  message String
+  isRead  Boolean @default(false)
+
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// OFFER CLAIM MODEL
+// ============================================
+model OfferClaim {
+  id Int @id @default(autoincrement())
+
+  userId  String
+  offerId Int
+
+  claimCode String @unique
+
+  status ClaimStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// OFFER VIEW MODEL
+// ============================================
+model OfferView {
+  id String @id @default(uuid())
+
+  offerId    Int
+  customerId String
+
+  viewedAt DateTime @default(now())
+
+  offer    Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  customer User  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, customerId])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+enum Role {
+  CUSTOMER
+  SHOP_OWNER
+  ADMIN
+}
+
+enum ClaimStatus {
+  PENDING
+  USED
+  EXPIRED
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+// ============================================
+// WHATSAPP CHANNEL MODELS
+// ============================================
+
+model WhatsAppChannel {
+  id          Int      @id @default(autoincrement())
+  channelId   String   @unique
+  channelName String
+  channelLink String   @unique
+  description String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  
+  totalFollowers Int @default(0)
+  totalClicks    Int @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clicks WhatsAppChannelClick[]
+}
+
+model WhatsAppChannelClick {
+  id         Int      @id @default(autoincrement())
+  channelId  Int
+  customerId String?
+  source     String?
+  clickedAt  DateTime @default(now())
+  
+  channel WhatsAppChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User?           @relation(fields: [customerId], references: [id])
+}
