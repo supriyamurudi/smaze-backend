@@ -1,3 +1,4 @@
+// backend/src/app.js
 const express = require("express");
 const cors = require("cors");
 
@@ -29,10 +30,55 @@ const authorize = require("./middleware/roleMiddleware");
 const app = express();
 
 // =========================
-// Global Middlewares
+// ✅ FIXED: CORS Configuration
 // =========================
-app.use(cors());
+
+// ✅ Option 1: Explicit allowed origins (Recommended for Production)
+const allowedOrigins = [
+  "https://smaze-frontend.vercel.app",
+  "https://smaze.com",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log(`❌ CORS blocked: ${origin}`);
+        callback(new Error(`Not allowed by CORS: ${origin}`));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  }),
+);
+
+// ✅ Option 2: Allow all origins (For testing only)
+// app.use(cors({
+//   origin: "*",
+//   credentials: true,
+//   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"],
+// }));
+
+// ✅ Log CORS requests for debugging
+app.use((req, res, next) => {
+  console.log(
+    `📤 ${req.method} ${req.url} from ${req.headers.origin || "same-origin"}`,
+  );
+  next();
+});
+
+// ✅ Body Parser
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // =========================
 // Home Route
@@ -42,46 +88,32 @@ app.get("/", (req, res) => {
 });
 
 // =========================
+// ✅ Health Check Route
+// =========================
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+    cors: "enabled",
+  });
+});
+
+// =========================
 // API Routes
 // =========================
-
-// ✅ ADD THIS - Home Routes (Public - No Auth Required)
 app.use("/api/home", homeRoutes);
-
-// Authentication
 app.use("/api/auth", authRoutes);
-
-// Categories
 app.use("/api/categories", categoryRoutes);
-
-// Shops
 app.use("/api/shops", shopRoutes);
-
-// Offers
 app.use("/api/offers", offerRoutes);
-
-// Claims
 app.use("/api/claims", claimRoutes);
-
-// Saved Offers
 app.use("/api/saved-offers", savedOfferRoutes);
-
-// Notifications
 app.use("/api/notifications", notificationRoutes);
-
-// Admin
 app.use("/api/admin", adminRoutes);
-
-// User
 app.use("/api/users", userRoutes);
-
-// Settings
 app.use("/api/settings", settingsRoutes);
-
-// Customer
 app.use("/api/customer", customerRoutes);
-
-// Profile
 app.use("/api/profile", profileRoutes);
 
 // =========================
@@ -98,8 +130,6 @@ app.get("/api/profile", protect, (req, res) => {
 // =========================
 // Temporary Test Routes (Remove later)
 // =========================
-
-// Shop Owner Test
 app.get("/api/shop", protect, authorize("SHOP_OWNER"), (req, res) => {
   res.status(200).json({
     success: true,
@@ -107,7 +137,6 @@ app.get("/api/shop", protect, authorize("SHOP_OWNER"), (req, res) => {
   });
 });
 
-// Admin Test
 app.get("/api/admin", protect, authorize("ADMIN"), (req, res) => {
   res.status(200).json({
     success: true,
@@ -122,6 +151,17 @@ app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "Route not found",
+  });
+});
+
+// =========================
+// Error Handler
+// =========================
+app.use((err, req, res, next) => {
+  console.error("❌ Error:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
   });
 });
 
