@@ -7,9 +7,7 @@ const {
   getProfile,
   updateProfile,
   changePassword,
-  forgotPassword,
-  resetPassword,
-  verifyResetToken,
+  resetPassword, // Simple reset - no email
 } = require("../controllers/authController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -24,16 +22,10 @@ router.post("/register", register);
 // Login
 router.post("/login", login);
 
-// ================= PASSWORD RESET =================
+// ================= PASSWORD RESET (SIMPLE - NO EMAIL) =================
 
-// Forgot Password - Request reset link
-router.post("/forgot-password", forgotPassword);
-
-// Reset Password - Set new password
+// Reset Password - Direct reset with email + new password
 router.post("/reset-password", resetPassword);
-
-// Verify Reset Token
-router.get("/verify-reset-token/:token", verifyResetToken);
 
 // ================= PROFILE =================
 

@@ -2,22 +2,14 @@
 const bcrypt = require("bcrypt");
 const prisma = require("../config/prisma");
 const generateToken = require("../utils/generateToken");
-const {
-  generateResetTokenWithExpiry,
-  isTokenExpired,
-} = require("../utils/tokenUtils");
-const { sendPasswordResetEmail } = require("../utils/emailService");
 
 // ================= REGISTER USER =================
 const register = async (req, res) => {
   try {
     const { name, email, phone, password, role } = req.body;
 
-    // Check existing user
     const existingUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
 
     if (existingUser) {
@@ -27,10 +19,8 @@ const register = async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Role handling
     let userRole = "CUSTOMER";
     if (role) {
       const normalizedRole = role.toUpperCase();
@@ -39,7 +29,6 @@ const register = async (req, res) => {
       }
     }
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         name,
@@ -51,7 +40,6 @@ const register = async (req, res) => {
       },
     });
 
-    // Generate JWT
     const token = generateToken(user);
 
     res.status(201).json({
@@ -80,7 +68,6 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // ✅ Validate input
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -88,11 +75,8 @@ const login = async (req, res) => {
       });
     }
 
-    // Find user
     const user = await prisma.user.findUnique({
-      where: {
-        email: email.toLowerCase(),
-      },
+      where: { email: email.toLowerCase() },
     });
 
     if (!user) {
@@ -102,7 +86,6 @@ const login = async (req, res) => {
       });
     }
 
-    // Check user status
     if (user.status === "BLOCKED") {
       return res.status(403).json({
         success: false,
@@ -118,7 +101,6 @@ const login = async (req, res) => {
       });
     }
 
-    // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -127,7 +109,6 @@ const login = async (req, res) => {
       });
     }
 
-    // ✅ Prepare user response
     const userResponse = {
       id: user.id,
       name: user.name,
@@ -138,7 +119,6 @@ const login = async (req, res) => {
       phone: user.phone,
     };
 
-    // ✅ If user is SHOP_OWNER, fetch shop status
     if (user.role === "SHOP_OWNER") {
       const shop = await prisma.shop.findFirst({
         where: { ownerId: user.id },
@@ -155,7 +135,6 @@ const login = async (req, res) => {
       userResponse.shopId = shop?.id || null;
     }
 
-    // Generate token
     const token = generateToken(user);
 
     res.status(200).json({
@@ -177,9 +156,7 @@ const login = async (req, res) => {
 const getProfile = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
-      where: {
-        id: req.user.id,
-      },
+      where: { id: req.user.id },
       select: {
         id: true,
         name: true,
@@ -200,7 +177,6 @@ const getProfile = async (req, res) => {
       });
     }
 
-    // ✅ If user is SHOP_OWNER, fetch shop status
     let shopInfo = null;
     if (user.role === "SHOP_OWNER") {
       const shop = await prisma.shop.findFirst({
@@ -240,9 +216,7 @@ const updateProfile = async (req, res) => {
     const { name, phone, city, address } = req.body;
 
     const updatedUser = await prisma.user.update({
-      where: {
-        id: req.user.id,
-      },
+      where: { id: req.user.id },
       data: {
         ...(name && { name }),
         ...(phone && { phone }),
@@ -299,7 +273,6 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Verify current password
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -308,7 +281,6 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await prisma.user.update({
@@ -329,70 +301,13 @@ const changePassword = async (req, res) => {
   }
 };
 
-// ================= FORGOT PASSWORD =================
-const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "No account found with this email address.",
-      });
-    }
-
-    // Generate reset token
-    const { token, expiry } = generateResetTokenWithExpiry();
-
-    // Save token to database
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetToken: token,
-        resetTokenExpiry: expiry,
-      },
-    });
-
-    // Send reset email
-    try {
-      await sendPasswordResetEmail(email, token, user.name);
-    } catch (emailError) {
-      console.error("❌ Email sending error:", emailError);
-      // Still return success to prevent email enumeration
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Password reset link has been sent to your email.",
-    });
-  } catch (error) {
-    console.error("❌ Forgot password error:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Failed to process request",
-    });
-  }
-};
-
-// ================= RESET PASSWORD =================
+// ================= RESET PASSWORD (SIMPLE - NO EMAIL VERIFICATION) =================
 const resetPassword = async (req, res) => {
   try {
-    const { token, newPassword, confirmPassword } = req.body;
+    const { email, newPassword, confirmPassword } = req.body;
 
     // Validate input
-    if (!token || !newPassword || !confirmPassword) {
+    if (!email || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -406,46 +321,32 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long",
+        message: "Password must be at least 8 characters long",
       });
     }
 
-    // Find user by reset token
-    const user = await prisma.user.findFirst({
-      where: {
-        resetToken: token,
-      },
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
     });
 
     if (!user) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "Invalid or expired reset token",
-      });
-    }
-
-    // Check if token is expired
-    if (isTokenExpired(user.resetTokenExpiry)) {
-      return res.status(400).json({
-        success: false,
-        message: "Reset token has expired. Please request a new one.",
+        message: "User not found with this email address",
       });
     }
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password and clear reset token
+    // Update password
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetToken: null,
-        resetTokenExpiry: null,
-      },
+      data: { password: hashedPassword },
     });
 
     return res.status(200).json({
@@ -454,7 +355,7 @@ const resetPassword = async (req, res) => {
         "Password reset successfully. You can now login with your new password.",
     });
   } catch (error) {
-    console.error("❌ Reset password error:", error);
+    console.error("Reset password error:", error);
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to reset password",
@@ -462,67 +363,12 @@ const resetPassword = async (req, res) => {
   }
 };
 
-// ================= VERIFY RESET TOKEN =================
-const verifyResetToken = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: "Token is required",
-      });
-    }
-
-    const user = await prisma.user.findFirst({
-      where: {
-        resetToken: token,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        resetToken: true,
-        resetTokenExpiry: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid reset token",
-      });
-    }
-
-    if (isTokenExpired(user.resetTokenExpiry)) {
-      return res.status(400).json({
-        success: false,
-        message: "Reset token has expired. Please request a new one.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Token is valid",
-      email: user.email,
-      name: user.name,
-    });
-  } catch (error) {
-    console.error("❌ Verify token error:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Failed to verify token",
-    });
-  }
-};
-
+// ================= EXPORT =================
 module.exports = {
   register,
   login,
   getProfile,
   updateProfile,
   changePassword,
-  forgotPassword,
-  resetPassword,
-  verifyResetToken,
+  resetPassword, // Simple reset password (no email verification)
 };

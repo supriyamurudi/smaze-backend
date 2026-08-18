@@ -12,6 +12,7 @@ datasource db {
 // ============================================
 // USER MODEL - UPDATED WITH GOOGLE ID
 // ============================================
+
 model User {
   id String @id @default(uuid())
 
@@ -26,8 +27,11 @@ model User {
   city    String?
   address String?
 
-  // ✅ Add Google ID field
   googleId String? @unique
+
+  // ✅ Add these fields for password reset
+  resetToken       String?
+  resetTokenExpiry DateTime?
 
   notifyOffers      Boolean @default(true)
   notifyExpiry      Boolean @default(true)
@@ -51,7 +55,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 // ============================================
 // SHOP MODEL - UPDATED WITH CITY AND APPROVAL FIELDS
 // ============================================
