@@ -35,10 +35,11 @@ const app = express();
 
 // ✅ Option 1: Explicit allowed origins (Recommended for Production)
 const allowedOrigins = [
-  "https://smaze-frontend.vercel.app",
-  "https://smaze.com",
-  "http://localhost:5173",
-  "http://localhost:3000",
+  "https://www.smaze.in", // ✅ Your main domain
+  "https://smaze-frontend-git-main-smaze.vercel.app", // ✅ Your Vercel URL
+  "https://smaze-frontend-om3bu38yj-smaze.vercel.app", // ✅ Your other Vercel URL
+  "http://localhost:5173", // ✅ Local development
+  "http://localhost:3000", // ✅ Local development
 ];
 
 app.use(
