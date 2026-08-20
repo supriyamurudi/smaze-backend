@@ -37,7 +37,7 @@ const app = express();
 const allowedOrigins = [
   "https://www.smaze.in", // ✅ Your main domain
   "https://smaze-frontend-git-main-smaze.vercel.app", // ✅ Your Vercel URL
-  "https://smaze-frontend-om3bu38yj-smaze.vercel.app", // ✅ Your other Vercel URL
+  "https://smaze-frontend-haefif1ay-smaze.vercel.app", // ✅ Your other Vercel URL
   "http://localhost:5173", // ✅ Local development
   "http://localhost:3000", // ✅ Local development
 ];
