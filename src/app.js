@@ -39,6 +39,7 @@ const allowedOrigins = [
   "https://smaze-frontend-git-main-smaze.vercel.app",
   "https://smaze-frontend-haefif1ay-smaze.vercel.app", // ✅ ADD THIS
   "https://smaze-frontend-om3bu38yj-smaze.vercel.app",
+  "https://smaze-frontend-ou1gmqemd-smaze.vercel.app", //current
   "http://localhost:5173",
   "http://localhost:3000",
 ];
