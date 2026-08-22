@@ -35,13 +35,20 @@ const app = express();
 
 // ✅ Option 1: Explicit allowed origins (Recommended for Production)
 const allowedOrigins = [
+  // ✅ Production domains - BOTH http and https
   "https://www.smaze.in",
+  "http://www.smaze.in", // ⚠️ ADD THIS
   "https://smaze.in",
+  "http://smaze.in", // ⚠️ ADD THIS
+
+  // ✅ Vercel preview URLs - NO trailing slashes
   "https://smaze-frontend-git-main-smaze.vercel.app",
-  "https://smaze-frontend-f97te0lql-smaze.vercel.app/", //current
+  "https://smaze-frontend-f97te0lql-smaze.vercel.app", // ✅ Removed trailing slash
   "https://smaze-frontend-om3bu38yj-smaze.vercel.app",
   "https://smaze-frontend-ou1gmqemd-smaze.vercel.app",
-  "https://smaze-frontend-3v8jokjw6-smaze.vercel.app/",
+  "https://smaze-frontend-3v8jokjw6-smaze.vercel.app", // ✅ Removed trailing slash
+
+  // ✅ Local development
   "http://localhost:5173",
   "http://localhost:3000",
 ];
