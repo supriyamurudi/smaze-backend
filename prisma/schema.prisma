@@ -175,6 +175,25 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model AdminNotification {
+  id                  Int      @id @default(autoincrement())
+  title               String
+  message             String
+  type                String   @default("system")
+  isRead              Boolean  @default(false)
+  isAdminNotification Boolean  @default(true)
+  link                String?
+  priority            String   @default("normal")
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([isRead])
+  @@index([type])
+  @@index([priority])
+  @@index([createdAt])
+}
+
 // ============================================
 // OFFER CLAIM MODEL
 // ============================================

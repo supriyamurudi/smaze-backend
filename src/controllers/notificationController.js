@@ -12,7 +12,7 @@ const generateWhatsAppMessage = (offer, shop) => {
   const offerUrl = `${APP_URL}/customer/offers/${offer.id}`;
 
   const message =
-    `🔔 *New Offer Alert!*\n\n` +
+    `🔔 *New Offer Alert!\n\n` +
     `🛍️ *${shop?.name || "Our Shop"}* has a new offer!\n\n` +
     `✨ *${offer.title}*\n` +
     `💰 ${offer.discount}% OFF\n` +
@@ -26,7 +26,7 @@ const generateWhatsAppMessage = (offer, shop) => {
 };
 
 // ===============================
-// Get User Notifications
+// Get User Notifications (Customer)
 // ===============================
 const getNotifications = async (req, res) => {
   try {
@@ -64,7 +64,7 @@ const getNotifications = async (req, res) => {
 };
 
 // ===============================
-// Get Unread Count
+// Get Unread Count (Customer)
 // ===============================
 const getUnreadCount = async (req, res) => {
   try {
@@ -91,7 +91,7 @@ const getUnreadCount = async (req, res) => {
 };
 
 // ===============================
-// Mark Notification as Read
+// Mark Notification as Read (Customer)
 // ===============================
 const markNotificationAsRead = async (req, res) => {
   try {
@@ -132,7 +132,7 @@ const markNotificationAsRead = async (req, res) => {
 };
 
 // ===============================
-// Mark All Notifications as Read
+// Mark All Notifications as Read (Customer)
 // ===============================
 const markAllNotificationsAsRead = async (req, res) => {
   try {
@@ -160,7 +160,7 @@ const markAllNotificationsAsRead = async (req, res) => {
 };
 
 // ===============================
-// Delete Notification
+// Delete Notification (Customer)
 // ===============================
 const deleteNotification = async (req, res) => {
   try {
@@ -199,7 +199,7 @@ const deleteNotification = async (req, res) => {
 };
 
 // ===============================
-// Delete All Notifications
+// Delete All Notifications (Customer)
 // ===============================
 const deleteAllNotifications = async (req, res) => {
   try {
@@ -219,6 +219,239 @@ const deleteAllNotifications = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+// =============================================
+// =========== ADMIN NOTIFICATIONS =============
+// =============================================
+
+// ===============================
+// Get Admin Notifications
+// ===============================
+const getAdminNotifications = async (req, res) => {
+  try {
+    const { limit = 50, page = 1, read, type } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build where clause
+    const where = {
+      isAdminNotification: true,
+    };
+
+    // Filter by read status
+    if (read === "true") where.isRead = true;
+    if (read === "false") where.isRead = false;
+
+    // Filter by type
+    if (type && type !== "all") {
+      where.type = type;
+    }
+
+    const [notifications, total] = await Promise.all([
+      prisma.adminNotification.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: parseInt(limit),
+        skip: skip,
+      }),
+      prisma.adminNotification.count({ where }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      notifications,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
+    });
+  } catch (error) {
+    console.error("Error fetching admin notifications:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Get Admin Unread Count
+// ===============================
+const getAdminUnreadCount = async (req, res) => {
+  try {
+    const count = await prisma.adminNotification.count({
+      where: {
+        isRead: false,
+        isAdminNotification: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      count,
+    });
+  } catch (error) {
+    console.error("Error fetching admin unread count:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Mark Admin Notification as Read
+// ===============================
+const markAdminNotificationAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.adminNotification.findFirst({
+      where: {
+        id: parseInt(id),
+        isAdminNotification: true,
+      },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin notification not found",
+      });
+    }
+
+    const updated = await prisma.adminNotification.update({
+      where: { id: parseInt(id) },
+      data: { isRead: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Admin notification marked as read",
+      notification: updated,
+    });
+  } catch (error) {
+    console.error("Error marking admin notification as read:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Mark All Admin Notifications as Read
+// ===============================
+const markAllAdminNotificationsAsRead = async (req, res) => {
+  try {
+    await prisma.adminNotification.updateMany({
+      where: {
+        isAdminNotification: true,
+        isRead: false,
+      },
+      data: { isRead: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "All admin notifications marked as read",
+    });
+  } catch (error) {
+    console.error("Error marking all admin notifications as read:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Delete Admin Notification
+// ===============================
+const deleteAdminNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.adminNotification.findFirst({
+      where: {
+        id: parseInt(id),
+        isAdminNotification: true,
+      },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin notification not found",
+      });
+    }
+
+    await prisma.adminNotification.delete({
+      where: { id: parseInt(id) },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Admin notification deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting admin notification:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Delete All Admin Notifications
+// ===============================
+const deleteAllAdminNotifications = async (req, res) => {
+  try {
+    await prisma.adminNotification.deleteMany({
+      where: { isAdminNotification: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "All admin notifications deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting all admin notifications:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ===============================
+// Create Admin Notification
+// ===============================
+const createAdminNotification = async (data) => {
+  try {
+    const notification = await prisma.adminNotification.create({
+      data: {
+        title: data.title,
+        message: data.message,
+        type: data.type || "system",
+        isRead: false,
+        isAdminNotification: true,
+        link: data.link || null,
+        priority: data.priority || "normal",
+        metadata: data.metadata || {},
+      },
+    });
+
+    // Emit WebSocket event if available
+    if (global.io) {
+      global.io.emit("admin_notification", notification);
+    }
+
+    return notification;
+  } catch (error) {
+    console.error("Error creating admin notification:", error);
+    throw error;
   }
 };
 
@@ -343,6 +576,15 @@ const sendWhatsAppOfferNotification = async (offer, shop) => {
       data: notifications,
     });
 
+    // Create admin notification
+    await createAdminNotification({
+      title: "📢 WhatsApp Offer Broadcast",
+      message: `New offer "${offer.title}" from "${shop.name}" sent to ${optedCustomers.length} customers via WhatsApp`,
+      type: "offer",
+      link: `/admin/offers/${offer.id}`,
+      priority: "normal",
+    });
+
     // Log WhatsApp messages (would be sent via WhatsApp Business API)
     console.log(
       `📱 WhatsApp messages to be sent to ${optedCustomers.length} customers`,
@@ -364,16 +606,70 @@ const sendWhatsAppOfferNotification = async (offer, shop) => {
 };
 
 // ===============================
+// Trigger Admin Notification on Events
+// ===============================
+
+// When a new user registers
+const triggerUserRegistered = async (user) => {
+  await createAdminNotification({
+    title: "👤 New User Registered",
+    message: `${user.name || "A new user"} (${user.email}) has registered on the platform`,
+    type: "user",
+    link: `/admin/users/${user.id}`,
+    priority: "normal",
+  });
+};
+
+// When a new shop is created
+const triggerShopCreated = async (shop) => {
+  await createAdminNotification({
+    title: "🏪 New Shop Listed",
+    message: `"${shop.name}" has been listed by ${shop.owner?.name || "a shop owner"}`,
+    type: "shop",
+    link: `/admin/shops/${shop.id}`,
+    priority: "normal",
+  });
+};
+
+// When a new offer is created
+const triggerOfferCreated = async (offer, shop) => {
+  await createAdminNotification({
+    title: "🏷️ New Offer Created",
+    message: `"${offer.title}" (${offer.discount}% OFF) created by "${shop?.name || "a shop"}"`,
+    type: "offer",
+    link: `/admin/offers/${offer.id}`,
+    priority: "normal",
+  });
+};
+
+// ===============================
 // EXPORTS
 // ===============================
 module.exports = {
+  // Customer notifications
   getNotifications,
   getUnreadCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
   deleteAllNotifications,
+
+  // Admin notifications
+  getAdminNotifications,
+  getAdminUnreadCount,
+  markAdminNotificationAsRead,
+  markAllAdminNotificationsAsRead,
+  deleteAdminNotification,
+  deleteAllAdminNotifications,
+  createAdminNotification,
+
+  // Admin actions
   adminSendToShopOwner,
   adminSendToAllShopOwners,
   sendWhatsAppOfferNotification,
+
+  // Triggers
+  triggerUserRegistered,
+  triggerShopCreated,
+  triggerOfferCreated,
 };
