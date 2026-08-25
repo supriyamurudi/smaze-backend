@@ -1,10 +1,13 @@
 // backend/src/controllers/offerController.js
+// backend/src/controllers/offerController.js
 const prisma = require("../config/prisma");
 const uploadImage = require("../utils/uploadImage");
 const { sendWhatsAppOfferNotification } = require("./notificationController");
 const {
   sendOfferPushNotification,
 } = require("../services/notificationService");
+// ✅ ADD THIS IMPORT
+const { triggerOfferCreated } = require("./notificationController");
 
 // ===============================
 // Create Offer
@@ -78,6 +81,16 @@ const createOffer = async (req, res) => {
         categoryId: Number(categoryId),
       },
     });
+
+    // ✅ TRIGGER ADMIN NOTIFICATION - New offer created
+    try {
+      console.log("🔔 Creating admin notification for new offer:", offer.title);
+      await triggerOfferCreated(offer, shop);
+      console.log("✅ Admin notification created for offer:", offer.title);
+    } catch (notifError) {
+      console.error("❌ Failed to create admin notification:", notifError);
+      // Don't fail the request if notification fails
+    }
 
     // ──────────────────────────────────────────
     // 🚀 SEND NOTIFICATIONS

@@ -2,6 +2,8 @@
 const bcrypt = require("bcrypt");
 const prisma = require("../config/prisma");
 const generateToken = require("../utils/generateToken");
+// ✅ ADD THIS IMPORT
+const { triggerUserRegistered } = require("./notificationController");
 
 // ================= REGISTER USER =================
 const register = async (req, res) => {
@@ -39,6 +41,16 @@ const register = async (req, res) => {
         status: "ACTIVE",
       },
     });
+
+    // ✅ TRIGGER ADMIN NOTIFICATION - New user registered
+    try {
+      console.log("🔔 Creating admin notification for new user:", user.email);
+      await triggerUserRegistered(user);
+      console.log("✅ Admin notification created for user:", user.email);
+    } catch (notifError) {
+      console.error("❌ Failed to create admin notification:", notifError);
+      // Don't fail the request if notification fails
+    }
 
     const token = generateToken(user);
 

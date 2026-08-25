@@ -1,7 +1,10 @@
 // backend/src/controllers/shopController.js
+// backend/src/controllers/shopController.js
 const prisma = require("../config/prisma");
 const uploadImage = require("../utils/uploadImage");
 const deleteImage = require("../utils/deleteImage");
+// ✅ ADD THIS IMPORT
+const { triggerShopCreated } = require("./notificationController");
 
 // ===============================
 // Create Shop
@@ -54,9 +57,29 @@ const createShop = async (req, res) => {
         ownerId: req.user.id,
         status: "pending",
       },
+      // ✅ INCLUDE owner data for the notification
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     console.log("Created Shop:", shop);
+
+    // ✅ TRIGGER ADMIN NOTIFICATION - New shop created
+    try {
+      console.log("🔔 Creating admin notification for new shop:", shop.name);
+      await triggerShopCreated(shop);
+      console.log("✅ Admin notification created for shop:", shop.name);
+    } catch (notifError) {
+      console.error("❌ Failed to create admin notification:", notifError);
+      // Don't fail the request if notification fails
+    }
 
     return res.status(201).json({
       success: true,
