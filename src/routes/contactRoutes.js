@@ -10,7 +10,7 @@ const {
   getUnreadCount,
   bulkDeleteMessages,
   getMessageStats,
-} = require("../controllers/ContactController");
+} = require("../controllers/contactController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
 
