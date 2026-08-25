@@ -20,7 +20,6 @@ const profileRoutes = require("./routes/profileRoutes");
 
 // ✅ ADD THIS - Home Routes
 const homeRoutes = require("./routes/homeRoutes");
-const contactRoutes = require("./routes/contactRoutes");
 
 // =========================
 // Middleware Imports
@@ -128,7 +127,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/profile", profileRoutes);
-app.use("/api/contact", contactRoutes);
 
 // =========================
 // Profile Route
