@@ -17,7 +17,7 @@ const sendContactMessage = async (req, res) => {
       });
     }
 
-    // Save to database
+    // ✅ 1. Save to database (THIS ALWAYS WORKS!)
     const contact = await prisma.contactMessage.create({
       data: {
         name,
@@ -27,125 +27,131 @@ const sendContactMessage = async (req, res) => {
       },
     });
 
-    // Email configuration
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
+    // ✅ 2. Try to send emails, but DO NOT crash if they fail!
+    try {
+      // Email configuration
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
 
-    // Email to Admin
-    const adminMailOptions = {
-      from: email,
-      to: process.env.ADMIN_EMAIL || "admin@smaze.in",
-      subject: `New Contact Message: ${subject}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #7c3aed, #ec4899); color: white; padding: 20px; border-radius: 10px 10px 0 0; }
-            .content { background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0; }
-            .field { margin-bottom: 15px; }
-            .label { font-weight: bold; color: #4b5563; }
-            .value { margin-top: 5px; padding: 10px; background: white; border-radius: 5px; border: 1px solid #e2e8f0; }
-            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #94a3b8; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>📩 New Contact Message</h2>
+      // Email to Admin
+      const adminMailOptions = {
+        from: email,
+        to: process.env.ADMIN_EMAIL || "admin@smaze.in",
+        subject: `New Contact Message: ${subject}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #7c3aed, #ec4899); color: white; padding: 20px; border-radius: 10px 10px 0 0; }
+              .content { background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0; }
+              .field { margin-bottom: 15px; }
+              .label { font-weight: bold; color: #4b5563; }
+              .value { margin-top: 5px; padding: 10px; background: white; border-radius: 5px; border: 1px solid #e2e8f0; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #94a3b8; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h2>📩 New Contact Message</h2>
+              </div>
+              <div class="content">
+                <div class="field">
+                  <div class="label">👤 Name</div>
+                  <div class="value">${name}</div>
+                </div>
+                <div class="field">
+                  <div class="label">📧 Email</div>
+                  <div class="value">${email}</div>
+                </div>
+                <div class="field">
+                  <div class="label">📝 Subject</div>
+                  <div class="value">${subject}</div>
+                </div>
+                <div class="field">
+                  <div class="label">💬 Message</div>
+                  <div class="value">${message}</div>
+                </div>
+              </div>
+              <div class="footer">
+                <p>Sent from Smaze Contact Form • ${new Date().toLocaleString()}</p>
+              </div>
             </div>
-            <div class="content">
-              <div class="field">
-                <div class="label">👤 Name</div>
-                <div class="value">${name}</div>
-              </div>
-              <div class="field">
-                <div class="label">📧 Email</div>
-                <div class="value">${email}</div>
-              </div>
-              <div class="field">
-                <div class="label">📝 Subject</div>
-                <div class="value">${subject}</div>
-              </div>
-              <div class="field">
-                <div class="label">💬 Message</div>
-                <div class="value">${message}</div>
-              </div>
-            </div>
-            <div class="footer">
-              <p>Sent from Smaze Contact Form • ${new Date().toLocaleString()}</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-    };
+          </body>
+          </html>
+        `,
+      };
 
-    // Auto-reply to user
-    const userMailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Thank you for contacting Smaze! 🙏",
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #7c3aed, #ec4899); color: white; padding: 20px; border-radius: 10px 10px 0 0; }
-            .content { background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0; }
-            .message-box { background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #7c3aed; margin: 10px 0; }
-            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #94a3b8; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>Thank You for Reaching Out! 🙏</h2>
-            </div>
-            <div class="content">
-              <p>Dear ${name},</p>
-              <p>Thank you for contacting Smaze. We have received your message and will get back to you within 24-48 hours.</p>
-              
-              <div class="message-box">
-                <h4>📝 Your Message:</h4>
-                <p>${message}</p>
+      // Auto-reply to user
+      const userMailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Thank you for contacting Smaze! 🙏",
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #7c3aed, #ec4899); color: white; padding: 20px; border-radius: 10px 10px 0 0; }
+              .content { background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0; }
+              .message-box { background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #7c3aed; margin: 10px 0; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #94a3b8; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h2>Thank You for Reaching Out! 🙏</h2>
               </div>
-              
-              <p>In the meantime, feel free to:</p>
-              <ul>
-                <li>📱 <a href="https://smaze.in/offers">Explore local offers</a></li>
-                <li>📚 <a href="https://smaze.in/categories">Browse categories</a></li>
-                <li>🏪 <a href="https://smaze.in/shops">Find nearby shops</a></li>
-              </ul>
-              
-              <br />
-              <p>Best regards,</p>
-              <p><strong>Team Smaze</strong></p>
-              <p>📍 Belagavi, Karnataka, India</p>
-              <p>📧 support@smaze.in</p>
+              <div class="content">
+                <p>Dear ${name},</p>
+                <p>Thank you for contacting Smaze. We have received your message and will get back to you within 24-48 hours.</p>
+                
+                <div class="message-box">
+                  <h4>📝 Your Message:</h4>
+                  <p>${message}</p>
+                </div>
+                
+                <p>In the meantime, feel free to:</p>
+                <ul>
+                  <li>📱 <a href="https://smaze.in/offers">Explore local offers</a></li>
+                  <li>📚 <a href="https://smaze.in/categories">Browse categories</a></li>
+                  <li>🏪 <a href="https://smaze.in/shops">Find nearby shops</a></li>
+                </ul>
+                
+                <br />
+                <p>Best regards,</p>
+                <p><strong>Team Smaze</strong></p>
+                <p>📍 Belagavi, Karnataka, India</p>
+                <p>📧 support@smaze.in</p>
+              </div>
+              <div class="footer">
+                <p>This is an automated response. Please do not reply to this email.</p>
+              </div>
             </div>
-            <div class="footer">
-              <p>This is an automated response. Please do not reply to this email.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-    };
+          </body>
+          </html>
+        `,
+      };
 
-    // Send emails
-    await transporter.sendMail(adminMailOptions);
-    await transporter.sendMail(userMailOptions);
+      await transporter.sendMail(adminMailOptions);
+      await transporter.sendMail(userMailOptions);
+    } catch (emailError) {
+      // Just log it, do NOT send a 500 error to the user!
+      console.error("Email sending failed (message saved to DB):", emailError);
+    }
 
+    // ✅ 3. Return success to the user (Even if email failed!)
     return res.status(200).json({
       success: true,
       message: "Message sent successfully!",
