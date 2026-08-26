@@ -177,7 +177,6 @@ model Notification {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
-
 model AdminNotification {
   id                  Int      @id @default(autoincrement())
   title               String
