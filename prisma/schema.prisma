@@ -162,13 +162,16 @@ model SavedOffer {
 // NOTIFICATION MODEL
 // ============================================
 model Notification {
-  id Int @id @default(autoincrement())
-
-  message String
-  isRead  Boolean @default(false)
-
-  userId String
-
+  id        Int      @id @default(autoincrement())
+  message   String
+  isRead    Boolean  @default(false)
+  
+  // Add these fields to match your code:
+  type      String   @default("admin_message") // or use an Enum
+  link      String?
+  metadata  Json?
+  
+  userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -193,6 +196,9 @@ model AdminNotification {
   @@index([priority])
   @@index([createdAt])
 }
+
+
+
 
 // ============================================
 // OFFER CLAIM MODEL
