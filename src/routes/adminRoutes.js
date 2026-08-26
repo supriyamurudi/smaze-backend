@@ -40,71 +40,13 @@ const {
   updateAdminPassword,
 } = require("../controllers/adminController");
 
-// ✅ ADD THIS IMPORT
-const {
-  getAdminNotifications,
-  getAdminUnreadCount,
-  markAdminNotificationAsRead,
-  markAllAdminNotificationsAsRead,
-  deleteAdminNotification,
-  deleteAllAdminNotifications,
-} = require("../controllers/notificationController");
+// ❌ REMOVED: Notification imports (already in notificationRoutes.js)
 
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// =========================
-// ✅ NOTIFICATION ROUTES - ADD THESE
-// =========================
-
-// Get all admin notifications
-router.get(
-  "/notifications",
-  protect,
-  authorize("ADMIN"),
-  getAdminNotifications,
-);
-
-// Get admin unread count
-router.get(
-  "/notifications/unread-count",
-  protect,
-  authorize("ADMIN"),
-  getAdminUnreadCount,
-);
-
-// Mark admin notification as read
-router.patch(
-  "/notifications/:id/read",
-  protect,
-  authorize("ADMIN"),
-  markAdminNotificationAsRead,
-);
-
-// Mark all admin notifications as read
-router.patch(
-  "/notifications/mark-all-read",
-  protect,
-  authorize("ADMIN"),
-  markAllAdminNotificationsAsRead,
-);
-
-// Delete admin notification
-router.delete(
-  "/notifications/:id",
-  protect,
-  authorize("ADMIN"),
-  deleteAdminNotification,
-);
-
-// Delete all admin notifications
-router.delete(
-  "/notifications/delete-all",
-  protect,
-  authorize("ADMIN"),
-  deleteAllAdminNotifications,
-);
+// ❌ REMOVED: All notification routes (already in notificationRoutes.js)
 
 // =========================
 // Dashboard Routes
