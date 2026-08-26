@@ -4,17 +4,20 @@ const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
 const bcrypt = require("bcryptjs");
 
-// ===============================
-// Helper: Check if ID is numeric
-// ===============================
-const isNumericId = (id) => {
-  if (!id) return false;
-  return /^\d+$/.test(id.toString());
-};
+// ================================
+// IMPORTS
+// ================================
+const {
+  triggerShopApproved,
+  triggerShopRejected,
+  triggerUserStatusChanged,
+} = require("./notificationController");
 
-// ===============================
-// Dashboard Stats
-// ===============================
+const isNumericId = (id) => id && /^\d+$/.test(id.toString());
+
+// ================================
+// DASHBOARD & REPORTS
+// ================================
 const getDashboardStats = async (req, res) => {
   try {
     const [totalUsers, totalShops, totalOffers, totalCategories] =
@@ -38,28 +41,24 @@ const getDashboardStats = async (req, res) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      dashboard: {
-        totalUsers: Number(totalUsers),
-        totalShops: Number(totalShops),
-        totalOffers: Number(totalOffers),
-        totalCategories: Number(totalCategories),
-        recentUsers,
-      },
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        dashboard: {
+          totalUsers: Number(totalUsers),
+          totalShops: Number(totalShops),
+          totalOffers: Number(totalOffers),
+          totalCategories: Number(totalCategories),
+          recentUsers,
+        },
+      });
   } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Dashboard error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Reports & Analytics
-// ===============================
 const getReports = async (req, res) => {
   try {
     const [totalUsers, totalShops, totalOffers, totalCategories] =
@@ -71,75 +70,29 @@ const getReports = async (req, res) => {
       ]);
 
     const monthlyOffersRaw = await prisma.$queryRaw`
-      SELECT 
-        TO_CHAR("createdAt", 'Mon YYYY') as month,
-        COUNT(*) as offers
-      FROM "Offer"
-      WHERE "createdAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY month
-      ORDER BY MIN("createdAt") ASC
+      SELECT TO_CHAR("createdAt", 'Mon YYYY') as month, COUNT(*) as offers
+      FROM "Offer" WHERE "createdAt" >= NOW() - INTERVAL '6 months'
+      GROUP BY month ORDER BY MIN("createdAt") ASC
     `;
-
-    const monthlyOffers = monthlyOffersRaw.map((item) => ({
-      month: item.month,
-      offers: Number(item.offers),
-    }));
 
     const categoryDistributionRaw = await prisma.$queryRaw`
-      SELECT 
-        c.name,
-        COUNT(o.id) as value
-      FROM "Category" c
-      LEFT JOIN "Offer" o ON o."categoryId" = c.id
-      GROUP BY c.id, c.name
-      ORDER BY value DESC
-      LIMIT 5
-    `;
-
-    const categoryDistribution = categoryDistributionRaw.map((item) => ({
-      name: item.name,
-      value: Number(item.value),
-    }));
-
-    const reportsRaw = await prisma.$queryRaw`
-      SELECT 
-        TO_CHAR("createdAt", 'Mon YYYY') as month,
-        COUNT(*) as offers,
-        CONCAT('+', FLOOR(RANDOM() * 30) + 5, '%') as growth,
-        'active' as status
-      FROM "Offer"
-      WHERE "createdAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY month
-      ORDER BY MIN("createdAt") ASC
+      SELECT c.name, COUNT(o.id) as value
+      FROM "Category" c LEFT JOIN "Offer" o ON o."categoryId" = c.id
+      GROUP BY c.id, c.name ORDER BY value DESC LIMIT 5
     `;
 
     const monthlyUsersRaw = await prisma.$queryRaw`
-      SELECT 
-        TO_CHAR("createdAt", 'Mon YYYY') as month,
-        COUNT(*) as users
-      FROM "User"
-      WHERE "createdAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY month
-      ORDER BY MIN("createdAt") ASC
+      SELECT TO_CHAR("createdAt", 'Mon YYYY') as month, COUNT(*) as users
+      FROM "User" WHERE "createdAt" >= NOW() - INTERVAL '6 months'
+      GROUP BY month ORDER BY MIN("createdAt") ASC
     `;
 
-    const monthlyUsers = monthlyUsersRaw.map((item) => ({
-      month: item.month,
-      users: Number(item.users),
+    const monthlyUsers = monthlyUsersRaw.map((u) => ({
+      month: u.month,
+      users: Number(u.users),
     }));
 
-    const reports = reportsRaw.map((report) => {
-      const userData = monthlyUsers.find((u) => u.month === report.month);
-      return {
-        month: report.month,
-        offers: Number(report.offers),
-        users: userData ? userData.users : 0,
-        growth: report.growth,
-        status: report.status,
-      };
-    });
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: {
         stats: {
@@ -148,142 +101,100 @@ const getReports = async (req, res) => {
           totalOffers: Number(totalOffers),
           totalCategories: Number(totalCategories),
         },
-        monthlyData: monthlyOffers,
-        categoryData: categoryDistribution,
-        reports: reports,
+        monthlyData: monthlyOffersRaw.map((m) => ({
+          month: m.month,
+          offers: Number(m.offers),
+        })),
+        categoryData: categoryDistributionRaw.map((c) => ({
+          name: c.name,
+          value: Number(c.value),
+        })),
+        reports: monthlyOffersRaw.map((report, i) => ({
+          month: report.month,
+          offers: Number(report.offers),
+          users: monthlyUsers[i]?.users || 0,
+          growth: `+${Math.floor(Math.random() * 30) + 5}%`,
+          status: "active",
+        })),
       },
     });
   } catch (error) {
-    console.error("Error fetching reports:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Reports error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Top Categories
-// ===============================
 const getTopCategories = async (req, res) => {
   try {
-    const topCategories = await prisma.category.findMany({
+    const data = await prisma.category.findMany({
       take: 5,
-      orderBy: {
-        offers: {
-          _count: "desc",
-        },
-      },
-      include: {
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
-      },
+      orderBy: { offers: { _count: "desc" } },
+      include: { _count: { select: { offers: true } } },
     });
-
-    return res.status(200).json({
-      success: true,
-      data: topCategories,
-    });
+    res.status(200).json({ success: true, data });
   } catch (error) {
-    console.error("Error fetching top categories:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Monthly Growth
-// ===============================
 const getMonthlyGrowth = async (req, res) => {
   try {
-    const growthDataRaw = await prisma.$queryRaw`
-      SELECT 
-        TO_CHAR("createdAt", 'Mon YYYY') as month,
-        COUNT(*) as count
-      FROM "User"
-      WHERE "createdAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY month
-      ORDER BY MIN("createdAt") ASC
+    const data = await prisma.$queryRaw`
+      SELECT TO_CHAR("createdAt", 'Mon YYYY') as month, COUNT(*) as count
+      FROM "User" WHERE "createdAt" >= NOW() - INTERVAL '6 months'
+      GROUP BY month ORDER BY MIN("createdAt") ASC
     `;
-
-    const growthData = growthDataRaw.map((item) => ({
-      month: item.month,
-      count: Number(item.count),
-    }));
-
-    return res.status(200).json({
-      success: true,
-      data: growthData,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        data: data.map((d) => ({ month: d.month, count: Number(d.count) })),
+      });
   } catch (error) {
-    console.error("Error fetching monthly growth:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Recent Activity
-// ===============================
 const getRecentActivity = async (req, res) => {
   try {
-    const recentActivity = await prisma.offer.findMany({
+    const data = await prisma.offer.findMany({
       take: 10,
       orderBy: { createdAt: "desc" },
       include: {
-        shop: {
-          select: {
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            name: true,
-          },
-        },
+        shop: { select: { name: true } },
+        category: { select: { name: true } },
       },
     });
-
-    return res.status(200).json({
-      success: true,
-      data: recentActivity,
-    });
+    res.status(200).json({ success: true, data });
   } catch (error) {
-    console.error("Error fetching recent activity:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Users
-// ===============================
+// ================================
+// USERS
+// ================================
+const userSelect = {
+  id: true,
+  userNumber: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+  phone: true,
+  image: true,
+  city: true,
+  address: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 const getUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       select: {
-        id: true,
-        userNumber: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        phone: true,
-        image: true,
-        city: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
+        ...userSelect,
         _count: {
           select: {
             shops: true,
@@ -294,393 +205,212 @@ const getUsers = async (req, res) => {
         },
       },
     });
-
-    const usersWithActive = users.map((user) => ({
-      ...user,
-      isActive: user.status === "ACTIVE",
-    }));
-
-    return res.status(200).json({
-      success: true,
-      users: usersWithActive,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        users: users.map((u) => ({ ...u, isActive: u.status === "ACTIVE" })),
+      });
   } catch (error) {
-    console.error("Error fetching users:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getUserById = async (req, res) => {
   try {
-    const id = req.params.id;
-
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: req.params.id },
       select: {
-        id: true,
-        userNumber: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        phone: true,
-        image: true,
-        city: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
+        ...userSelect,
         _count: {
-          select: {
-            shops: true,
-            savedOffers: true,
-            offerClaims: true,
-          },
+          select: { shops: true, savedOffers: true, offerClaims: true },
         },
       },
     });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    res
+      .status(200)
+      .json({
+        success: true,
+        user: { ...user, isActive: user.status === "ACTIVE" },
       });
-    }
-
-    return res.status(200).json({
-      success: true,
-      user: {
-        ...user,
-        isActive: user.status === "ACTIVE",
-      },
-    });
   } catch (error) {
-    console.error("Error fetching user:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const updateUser = async (req, res) => {
   try {
-    const id = req.params.id;
     const { name, email, role, status } = req.body;
-
     const user = await prisma.user.update({
-      where: { id },
-      data: {
-        name,
-        email,
-        role,
-        status,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      where: { id: req.params.id },
+      data: { name, email, role, status },
+      select: userSelect,
     });
-
-    return res.status(200).json({
-      success: true,
-      message: "User updated successfully",
-      user: {
-        ...user,
-        isActive: user.status === "ACTIVE",
-      },
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "User updated",
+        user: { ...user, isActive: user.status === "ACTIVE" },
+      });
   } catch (error) {
-    console.error("Error updating user:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const deleteUser = async (req, res) => {
   try {
-    const id = req.params.id;
-
-    await prisma.user.delete({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "User deleted successfully",
-    });
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.status(200).json({ success: true, message: "User deleted" });
   } catch (error) {
-    console.error("Error deleting user:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const toggleUserStatus = async (req, res) => {
   try {
-    const id = req.params.id;
-
-    const user = await prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
     const newStatus = user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
-
     const updatedUser = await prisma.user.update({
-      where: { id },
+      where: { id: req.params.id },
       data: { status: newStatus },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-        role: true,
-        phone: true,
-        image: true,
-        city: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
-        userNumber: true,
-      },
+      select: userSelect,
     });
 
-    return res.status(200).json({
+    await triggerUserStatusChanged(updatedUser, newStatus).catch((e) =>
+      console.error("Notif error:", e),
+    );
+
+    res.status(200).json({
       success: true,
-      message: `User ${updatedUser.status === "ACTIVE" ? "activated" : "blocked"} successfully`,
-      user: {
-        ...updatedUser,
-        isActive: updatedUser.status === "ACTIVE",
-      },
+      message: `User ${newStatus === "ACTIVE" ? "activated" : "blocked"}`,
+      user: { ...updatedUser, isActive: updatedUser.status === "ACTIVE" },
     });
   } catch (error) {
-    console.error("Error toggling user status:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const restoreUser = async (req, res) => {
   try {
-    const id = req.params.id;
-
     const user = await prisma.user.update({
-      where: { id },
+      where: { id: req.params.id },
       data: { status: "ACTIVE" },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-      },
+      select: { id: true, name: true, email: true, status: true },
     });
-
-    return res.status(200).json({
-      success: true,
-      message: "User restored successfully",
-      user: {
-        ...user,
-        isActive: user.status === "ACTIVE",
-      },
-    });
+    await triggerUserStatusChanged(user, "ACTIVE").catch((e) =>
+      console.error("Notif error:", e),
+    );
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "User restored",
+        user: { ...user, isActive: true },
+      });
   } catch (error) {
-    console.error("Error restoring user:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Shops
-// ===============================
+// ================================
+// SHOPS
+// ================================
+const shopInclude = {
+  owner: { select: { id: true, name: true, email: true, phone: true } },
+  category: { select: { id: true, name: true } },
+  _count: { select: { offers: true } },
+};
 
 const getShops = async (req, res) => {
   try {
     const { status, category, search } = req.query;
-
-    let where = {};
-
-    if (status && status !== "all") {
-      where.status = status;
-    }
-
-    if (category && category !== "all") {
-      where.categoryId = parseInt(category);
-    }
-
-    if (search) {
+    const where = {};
+    if (status && status !== "all") where.status = status;
+    if (category && category !== "all") where.categoryId = parseInt(category);
+    if (search)
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { address: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
         { city: { contains: search, mode: "insensitive" } },
         { phone: { contains: search, mode: "insensitive" } },
         { owner: { name: { contains: search, mode: "insensitive" } } },
         { owner: { email: { contains: search, mode: "insensitive" } } },
       ];
-    }
 
     const shops = await prisma.shop.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
-      },
+      include: shopInclude,
     });
-
-    return res.status(200).json({
-      success: true,
-      shops,
-    });
+    res.status(200).json({ success: true, shops });
   } catch (error) {
-    console.error("❌ Error fetching shops:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getShopStats = async (req, res) => {
   try {
-    const [totalShops, activeShops, pendingShops, rejectedShops, shopOwners] =
-      await Promise.all([
-        prisma.shop.count(),
-        prisma.shop.count({ where: { status: "active" } }),
-        prisma.shop.count({ where: { status: "pending" } }),
-        prisma.shop.count({ where: { status: "rejected" } }),
-        prisma.user.count({ where: { role: "SHOP_OWNER" } }),
-      ]);
-
+    const [total, active, pending, rejected, shopOwners] = await Promise.all([
+      prisma.shop.count(),
+      prisma.shop.count({ where: { status: "active" } }),
+      prisma.shop.count({ where: { status: "pending" } }),
+      prisma.shop.count({ where: { status: "rejected" } }),
+      prisma.user.count({ where: { role: "SHOP_OWNER" } }),
+    ]);
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     const monthlyGrowth = await prisma.shop.count({
-      where: {
-        createdAt: { gte: lastMonth },
-      },
+      where: { createdAt: { gte: lastMonth } },
     });
 
-    const activePercentage =
-      totalShops > 0 ? ((activeShops / totalShops) * 100).toFixed(1) : 0;
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: {
-        total: Number(totalShops),
-        active: Number(activeShops),
-        pending: Number(pendingShops),
-        rejected: Number(rejectedShops),
+        total: Number(total),
+        active: Number(active),
+        pending: Number(pending),
+        rejected: Number(rejected),
         shopOwners: Number(shopOwners),
         monthlyGrowth: Number(monthlyGrowth),
-        activePercentage: Number(activePercentage),
+        activePercentage:
+          total > 0 ? Number(((active / total) * 100).toFixed(1)) : 0,
       },
     });
   } catch (error) {
-    console.error("❌ Error fetching shop stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getShopById = async (req, res) => {
   try {
-    const id = req.params.id;
-
-    if (!id || !isNumericId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop ID",
-      });
-    }
+    const id = parseInt(req.params.id);
+    if (!isNumericId(id))
+      return res.status(400).json({ success: false, message: "Invalid ID" });
 
     const shop = await prisma.shop.findUnique({
-      where: { id: parseInt(id) },
+      where: { id },
       include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        offers: {
-          orderBy: { createdAt: "desc" },
-          take: 5,
-        },
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
+        ...shopInclude,
+        offers: { orderBy: { createdAt: "desc" }, take: 5 },
       },
     });
-
-    if (!shop) {
-      return res.status(404).json({
-        success: false,
-        message: "Shop not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      shop,
-    });
+    if (!shop)
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found" });
+    res.status(200).json({ success: true, shop });
   } catch (error) {
-    console.error("Error fetching shop:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -698,31 +428,20 @@ const createShop = async (req, res) => {
       phone,
       description,
     } = req.body;
+    if (!name?.trim())
+      return res
+        .status(400)
+        .json({ success: false, message: "Shop name required" });
+    if (!ownerId)
+      return res
+        .status(400)
+        .json({ success: false, message: "Owner ID required" });
 
-    if (!name || name.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Shop name is required",
-      });
-    }
-
-    if (!ownerId) {
-      return res.status(400).json({
-        success: false,
-        message: "Owner ID is required",
-      });
-    }
-
-    const owner = await prisma.user.findUnique({
-      where: { id: ownerId },
-    });
-
-    if (!owner) {
-      return res.status(404).json({
-        success: false,
-        message: "Owner not found",
-      });
-    }
+    const owner = await prisma.user.findUnique({ where: { id: ownerId } });
+    if (!owner)
+      return res
+        .status(404)
+        .json({ success: false, message: "Owner not found" });
 
     let image = "";
     if (req.file) {
@@ -731,14 +450,14 @@ const createShop = async (req, res) => {
           const uploadStream = cloudinary.uploader.upload_stream(
             { folder: "smaze/shops" },
             (error, result) => {
-              if (error) return reject(error);
-              resolve(result.secure_url);
+              if (error) reject(error);
+              else resolve(result.secure_url);
             },
           );
           streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
         });
-      } catch (uploadError) {
-        console.error("❌ Image upload error:", uploadError);
+      } catch (e) {
+        console.error("Upload error:", e);
       }
     }
 
@@ -758,42 +477,23 @@ const createShop = async (req, res) => {
         status: "pending",
       },
       include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        owner: { select: { id: true, name: true, email: true } },
+        category: { select: { id: true, name: true } },
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Shop created successfully",
-      shop,
-    });
+    res.status(201).json({ success: true, message: "Shop created", shop });
   } catch (error) {
-    console.error("Error creating shop:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Update Shop - FIXED with better error handling
-// ===============================
 const updateShop = async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = parseInt(req.params.id);
+    if (!isNumericId(id))
+      return res.status(400).json({ success: false, message: "Invalid ID" });
+
     const {
       name,
       city,
@@ -807,449 +507,202 @@ const updateShop = async (req, res) => {
       phone,
       ownerId,
     } = req.body;
+    if (!name?.trim())
+      return res
+        .status(400)
+        .json({ success: false, message: "Shop name required" });
 
-    console.log("📝 Received update data for shop:", {
-      id,
-      name,
-      city,
-      address,
-      status,
-      phone,
-      categoryId,
-    });
+    const existing = await prisma.shop.findUnique({ where: { id } });
+    if (!existing)
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found" });
 
-    // ✅ Validate ID
-    if (!id || !isNumericId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop ID",
-      });
-    }
-
-    // ✅ Validate required fields
-    if (!name || name.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Shop name is required",
-      });
-    }
-
-    // ✅ Check if shop exists
-    const existingShop = await prisma.shop.findUnique({
-      where: { id: parseInt(id) },
-    });
-
-    if (!existingShop) {
-      return res.status(404).json({
-        success: false,
-        message: "Shop not found",
-      });
-    }
-
-    // ✅ Check if category exists (if categoryId is provided)
-    let validCategoryId = null;
-    if (categoryId && !isNaN(parseInt(categoryId))) {
-      const category = await prisma.category.findUnique({
-        where: { id: parseInt(categoryId) },
-      });
-
-      if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: "Category not found",
-        });
-      }
-      validCategoryId = parseInt(categoryId);
-    }
-
-    // ✅ Build update data
     const updateData = {
       name: name.trim(),
-      status: status || existingShop.status || "pending",
+      status: status || existing.status || "pending",
     };
-
-    // Add fields only if they are provided
-    if (phone && phone.trim() !== "") {
-      updateData.phone = phone.trim();
+    if (phone?.trim()) updateData.phone = phone.trim();
+    if (description?.trim()) updateData.description = description.trim();
+    if (city?.trim()) updateData.city = city.trim();
+    if (address?.trim()) updateData.address = address.trim();
+    if (ownerId) updateData.ownerId = ownerId;
+    if (categoryId && !isNaN(parseInt(categoryId))) {
+      const cat = await prisma.category.findUnique({
+        where: { id: parseInt(categoryId) },
+      });
+      if (!cat)
+        return res
+          .status(400)
+          .json({ success: false, message: "Category not found" });
+      updateData.categoryId = parseInt(categoryId);
     }
-
-    if (description && description.trim() !== "") {
-      updateData.description = description.trim();
-    }
-
-    if (city && city.trim() !== "") {
-      updateData.city = city.trim();
-    }
-
-    if (address && address.trim() !== "") {
-      updateData.address = address.trim();
-    }
-
-    if (ownerId) {
-      updateData.ownerId = ownerId;
-    }
-
-    if (validCategoryId !== null) {
-      updateData.categoryId = validCategoryId;
-    }
-
-    if (latitude && !isNaN(parseFloat(latitude))) {
+    if (latitude && !isNaN(parseFloat(latitude)))
       updateData.latitude = parseFloat(latitude);
-    }
-
-    if (longitude && !isNaN(parseFloat(longitude))) {
+    if (longitude && !isNaN(parseFloat(longitude)))
       updateData.longitude = parseFloat(longitude);
-    }
+    if (googleMapLink?.trim()) updateData.googleMapLink = googleMapLink.trim();
 
-    if (googleMapLink && googleMapLink.trim() !== "") {
-      updateData.googleMapLink = googleMapLink.trim();
-    }
-
-    // Handle image upload
     if (req.file) {
       try {
         const image = await new Promise((resolve, reject) => {
           const uploadStream = cloudinary.uploader.upload_stream(
             { folder: "smaze/shops" },
             (error, result) => {
-              if (error) return reject(error);
-              resolve(result.secure_url);
+              if (error) reject(error);
+              else resolve(result.secure_url);
             },
           );
           streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
         });
         updateData.image = image;
-      } catch (uploadError) {
-        console.error("❌ Image upload error:", uploadError);
-        return res.status(500).json({
-          success: false,
-          message: "Failed to upload image",
-        });
+      } catch (e) {
+        return res
+          .status(500)
+          .json({ success: false, message: "Failed to upload image" });
       }
     }
 
-    console.log("📝 Final update data:", JSON.stringify(updateData, null, 2));
-
-    // ✅ Update shop
     const shop = await prisma.shop.update({
-      where: { id: parseInt(id) },
+      where: { id },
       data: updateData,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      include: shopInclude,
     });
-
-    return res.status(200).json({
-      success: true,
-      message: "Shop updated successfully",
-      shop,
-    });
+    res.status(200).json({ success: true, message: "Shop updated", shop });
   } catch (error) {
-    console.error("❌ Error updating shop:", error);
-    console.error("❌ Error details:", error.message);
-    console.error("❌ Error stack:", error.stack);
-
-    // Handle Prisma specific errors
-    if (error.code) {
-      return res.status(500).json({
-        success: false,
-        message: `Database error: ${error.message}`,
-        code: error.code,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Failed to update shop",
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const deleteShop = async (req, res) => {
   try {
-    const id = req.params.id;
-
-    if (!id || !isNumericId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop ID",
-      });
-    }
-
-    await prisma.shop.delete({
-      where: { id: parseInt(id) },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Shop deleted successfully",
-    });
+    const id = parseInt(req.params.id);
+    if (!isNumericId(id))
+      return res.status(400).json({ success: false, message: "Invalid ID" });
+    await prisma.shop.delete({ where: { id } });
+    res.status(200).json({ success: true, message: "Shop deleted" });
   } catch (error) {
-    console.error("Error deleting shop:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Shop Approval Functions
-// ===============================
-
+// ================================
+// SHOP APPROVAL (WITH NOTIFICATIONS)
+// ================================
 const getPendingShops = async (req, res) => {
   try {
-    const pendingShops = await prisma.shop.findMany({
-      where: {
-        status: "pending",
-      },
+    const shops = await prisma.shop.findMany({
+      where: { status: "pending" },
       orderBy: { createdAt: "asc" },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
-      },
+      include: shopInclude,
     });
-
-    return res.status(200).json({
-      success: true,
-      shops: pendingShops,
-    });
+    res.status(200).json({ success: true, shops });
   } catch (error) {
-    console.error("❌ Error fetching pending shops:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const approveShop = async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = parseInt(req.params.id);
+    if (!isNumericId(id))
+      return res.status(400).json({ success: false, message: "Invalid ID" });
 
-    if (!id || !isNumericId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop ID",
-      });
-    }
-
-    const existingShop = await prisma.shop.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+    const shop = await prisma.shop.findUnique({
+      where: { id },
+      include: { owner: { select: { id: true, name: true, email: true } } },
     });
+    if (!shop)
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found" });
+    if (shop.status === "active")
+      return res
+        .status(200)
+        .json({ success: true, message: "Already approved", shop });
 
-    if (!existingShop) {
-      return res.status(404).json({
-        success: false,
-        message: "Shop not found",
-      });
-    }
-
-    if (existingShop.status === "active") {
-      return res.status(200).json({
-        success: true,
-        message: "Shop is already approved",
-        shop: existingShop,
-      });
-    }
-
-    const shop = await prisma.shop.update({
-      where: { id: parseInt(id) },
+    const updated = await prisma.shop.update({
+      where: { id },
       data: {
         status: "active",
         approvedAt: new Date(),
         approvedBy: req.user.id,
         rejectionReason: null,
       },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
-      },
+      include: shopInclude,
     });
 
-    console.log(`✅ Shop "${shop.name}" approved by admin ${req.user.id}`);
-
-    return res.status(200).json({
-      success: true,
-      message: "Shop approved successfully",
-      shop,
-    });
+    await triggerShopApproved(updated).catch((e) =>
+      console.error("Notif error:", e),
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Shop approved", shop: updated });
   } catch (error) {
-    console.error("❌ Error approving shop:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const rejectShop = async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = parseInt(req.params.id);
+    if (!isNumericId(id))
+      return res.status(400).json({ success: false, message: "Invalid ID" });
+
     const { reason } = req.body;
-
-    if (!id || !isNumericId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop ID",
-      });
-    }
-
-    const existingShop = await prisma.shop.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+    const shop = await prisma.shop.findUnique({
+      where: { id },
+      include: { owner: { select: { id: true, name: true, email: true } } },
     });
+    if (!shop)
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found" });
+    if (shop.status === "rejected")
+      return res
+        .status(200)
+        .json({ success: true, message: "Already rejected", shop });
 
-    if (!existingShop) {
-      return res.status(404).json({
-        success: false,
-        message: "Shop not found",
-      });
-    }
-
-    if (existingShop.status === "rejected") {
-      return res.status(200).json({
-        success: true,
-        message: "Shop is already rejected",
-        shop: existingShop,
-      });
-    }
-
-    const shop = await prisma.shop.update({
-      where: { id: parseInt(id) },
+    const updated = await prisma.shop.update({
+      where: { id },
       data: {
         status: "rejected",
         rejectedAt: new Date(),
         approvedBy: req.user.id,
         rejectionReason: reason || "No reason provided",
       },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            offers: true,
-          },
-        },
-      },
+      include: shopInclude,
     });
 
-    console.log(`❌ Shop "${shop.name}" rejected by admin ${req.user.id}`);
-
-    return res.status(200).json({
-      success: true,
-      message: "Shop rejected",
-      shop,
-    });
+    await triggerShopRejected(updated, reason).catch((e) =>
+      console.error("Notif error:", e),
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "Shop rejected", shop: updated });
   } catch (error) {
-    console.error("❌ Error rejecting shop:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const bulkApproveShops = async (req, res) => {
   try {
     const { shopIds } = req.body;
-
-    if (!shopIds || !Array.isArray(shopIds) || shopIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No shop IDs provided",
-      });
-    }
+    if (!shopIds?.length)
+      return res.status(400).json({ success: false, message: "No shop IDs" });
 
     const validIds = shopIds
       .filter((id) => isNumericId(id))
       .map((id) => parseInt(id));
+    if (!validIds.length)
+      return res.status(400).json({ success: false, message: "Invalid IDs" });
 
-    if (validIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop IDs provided",
-      });
-    }
-
+    const shops = await prisma.shop.findMany({
+      where: { id: { in: validIds }, status: "pending" },
+      include: { owner: { select: { id: true } } },
+    });
     const result = await prisma.shop.updateMany({
-      where: {
-        id: { in: validIds },
-        status: "pending",
-      },
+      where: { id: { in: validIds }, status: "pending" },
       data: {
         status: "active",
         approvedAt: new Date(),
@@ -1258,170 +711,109 @@ const bulkApproveShops = async (req, res) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: `${result.count} shops approved successfully`,
-      modifiedCount: result.count,
-    });
+    for (const shop of shops) {
+      await triggerShopApproved(shop).catch((e) =>
+        console.error(`Notif error for shop ${shop.id}:`, e),
+      );
+    }
+
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: `${result.count} shops approved`,
+        modifiedCount: result.count,
+      });
   } catch (error) {
-    console.error("❌ Error bulk approving shops:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const bulkRejectShops = async (req, res) => {
   try {
     const { shopIds, reason } = req.body;
-
-    if (!shopIds || !Array.isArray(shopIds) || shopIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No shop IDs provided",
-      });
-    }
+    if (!shopIds?.length)
+      return res.status(400).json({ success: false, message: "No shop IDs" });
 
     const validIds = shopIds
       .filter((id) => isNumericId(id))
       .map((id) => parseInt(id));
+    if (!validIds.length)
+      return res.status(400).json({ success: false, message: "Invalid IDs" });
 
-    if (validIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid shop IDs provided",
-      });
-    }
-
+    const shops = await prisma.shop.findMany({
+      where: { id: { in: validIds }, status: "pending" },
+      include: { owner: { select: { id: true } } },
+    });
     const result = await prisma.shop.updateMany({
-      where: {
-        id: { in: validIds },
-        status: "pending",
-      },
+      where: { id: { in: validIds }, status: "pending" },
       data: {
         status: "rejected",
         rejectedAt: new Date(),
         approvedBy: req.user.id,
-        rejectionReason: reason || "Bulk rejection - No reason provided",
+        rejectionReason: reason || "Bulk rejection",
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: `${result.count} shops rejected`,
-      modifiedCount: result.count,
-    });
+    for (const shop of shops) {
+      await triggerShopRejected(shop, reason).catch((e) =>
+        console.error(`Notif error for shop ${shop.id}:`, e),
+      );
+    }
+
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: `${result.count} shops rejected`,
+        modifiedCount: result.count,
+      });
   } catch (error) {
-    console.error("❌ Error bulk rejecting shops:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Offers
-// ===============================
+// ================================
+// OFFERS
+// ================================
 const getOffers = async (req, res) => {
   try {
     const offers = await prisma.offer.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        shop: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
       },
     });
-
-    return res.status(200).json({
-      success: true,
-      offers,
-    });
+    res.status(200).json({ success: true, offers });
   } catch (error) {
-    console.error("Error fetching offers:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getOfferById = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-
-    if (!id || isNaN(id) || id <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid offer ID. Please provide a valid number.",
-      });
-    }
+    if (!id || id <= 0)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid offer ID" });
 
     const offer = await prisma.offer.findUnique({
       where: { id },
       include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-            ownerId: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        shop: { select: { id: true, name: true, ownerId: true } },
+        category: { select: { id: true, name: true } },
       },
     });
+    if (!offer)
+      return res
+        .status(404)
+        .json({ success: false, message: "Offer not found" });
 
-    if (!offer) {
-      return res.status(404).json({
-        success: false,
-        message: "Offer not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      offer: {
-        id: offer.id,
-        title: offer.title,
-        description: offer.description || "",
-        discount: offer.discount || 0,
-        image: offer.image || "",
-        startDate: offer.startDate,
-        endDate: offer.endDate,
-        validUntil: offer.endDate,
-        views: offer.views || 0,
-        createdAt: offer.createdAt,
-        updatedAt: offer.updatedAt,
-        shop: offer.shop,
-        category: offer.category,
-        shopId: offer.shopId,
-        categoryId: offer.categoryId,
-        shopName: offer.shop?.name || "",
-        categoryName: offer.category?.name || "",
-      },
-    });
+    res.status(200).json({ success: true, offer });
   } catch (error) {
-    console.error("Error in getOfferById:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Failed to fetch offer details",
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -1436,15 +828,14 @@ const createOffer = async (req, res) => {
       startDate,
       endDate,
     } = req.body;
-
     let image = "";
     if (req.file) {
       image = await new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           { folder: "smaze/offers" },
           (error, result) => {
-            if (error) return reject(error);
-            resolve(result.secure_url);
+            if (error) reject(error);
+            else resolve(result.secure_url);
           },
         );
         streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
@@ -1463,32 +854,14 @@ const createOffer = async (req, res) => {
         endDate: new Date(endDate),
       },
       include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        shop: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Offer created successfully",
-      offer,
-    });
+    res.status(201).json({ success: true, message: "Offer created", offer });
   } catch (error) {
-    console.error("Error creating offer:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -1511,8 +884,8 @@ const updateOffer = async (req, res) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           { folder: "smaze/offers" },
           (error, result) => {
-            if (error) return reject(error);
-            resolve(result.secure_url);
+            if (error) reject(error);
+            else resolve(result.secure_url);
           },
         );
         streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
@@ -1527,139 +900,70 @@ const updateOffer = async (req, res) => {
         categoryId: categoryId ? parseInt(categoryId) : undefined,
         description,
         discount: discount ? parseInt(discount) : undefined,
-        image: image,
+        image,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
       },
       include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        shop: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Offer updated successfully",
-      offer,
-    });
+    res.status(200).json({ success: true, message: "Offer updated", offer });
   } catch (error) {
-    console.error("Error updating offer:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const deleteOffer = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    await prisma.offer.delete({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Offer deleted successfully",
-    });
+    await prisma.offer.delete({ where: { id: parseInt(req.params.id) } });
+    res.status(200).json({ success: true, message: "Offer deleted" });
   } catch (error) {
-    console.error("Error deleting offer:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Categories
-// ===============================
+// ================================
+// CATEGORIES
+// ================================
 const getCategories = async (req, res) => {
   try {
     const categories = await prisma.category.findMany({
       orderBy: { name: "asc" },
-      include: {
-        _count: {
-          select: {
-            offers: true,
-            shops: true,
-          },
-        },
-      },
+      include: { _count: { select: { offers: true, shops: true } } },
     });
-
-    return res.status(200).json({
-      success: true,
-      categories,
-    });
+    res.status(200).json({ success: true, categories });
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getCategoryById = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
     const category = await prisma.category.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            offers: true,
-            shops: true,
-          },
-        },
-      },
+      where: { id: parseInt(req.params.id) },
+      include: { _count: { select: { offers: true, shops: true } } },
     });
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      category,
-    });
+    if (!category)
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
+    res.status(200).json({ success: true, category });
   } catch (error) {
-    console.error("Error fetching category:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const createCategory = async (req, res) => {
   try {
     const { name } = req.body;
-
-    const existing = await prisma.category.findUnique({
-      where: { name },
-    });
-
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Category already exists",
-      });
-    }
+    const existing = await prisma.category.findUnique({ where: { name } });
+    if (existing)
+      return res
+        .status(400)
+        .json({ success: false, message: "Category exists" });
 
     let image = "";
     if (req.file) {
@@ -1667,32 +971,20 @@ const createCategory = async (req, res) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           { folder: "smaze/categories" },
           (error, result) => {
-            if (error) return reject(error);
-            resolve(result.secure_url);
+            if (error) reject(error);
+            else resolve(result.secure_url);
           },
         );
         streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
       });
     }
 
-    const category = await prisma.category.create({
-      data: {
-        name,
-        image,
-      },
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Category created successfully",
-      category,
-    });
+    const category = await prisma.category.create({ data: { name, image } });
+    res
+      .status(201)
+      .json({ success: true, message: "Category created", category });
   } catch (error) {
-    console.error("Error creating category:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -1700,15 +992,15 @@ const updateCategory = async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name } = req.body;
-
     let image = undefined;
+
     if (req.file) {
       image = await new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           { folder: "smaze/categories" },
           (error, result) => {
-            if (error) return reject(error);
-            resolve(result.secure_url);
+            if (error) reject(error);
+            else resolve(result.secure_url);
           },
         );
         streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
@@ -1717,274 +1009,155 @@ const updateCategory = async (req, res) => {
 
     const category = await prisma.category.update({
       where: { id },
-      data: {
-        name,
-        image,
-      },
+      data: { name, image },
     });
-
-    return res.status(200).json({
-      success: true,
-      message: "Category updated successfully",
-      category,
-    });
+    res
+      .status(200)
+      .json({ success: true, message: "Category updated", category });
   } catch (error) {
-    console.error("Error updating category:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const deleteCategory = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    await prisma.category.delete({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Category deleted successfully",
-    });
+    await prisma.category.delete({ where: { id: parseInt(req.params.id) } });
+    res.status(200).json({ success: true, message: "Category deleted" });
   } catch (error) {
-    console.error("Error deleting category:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Admin Profile
-// ===============================
+// ================================
+// ADMIN PROFILE
+// ================================
 const getAdminProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
-
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: req.user.id },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        phone: true,
-        image: true,
-        city: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
+        ...userSelect,
         _count: {
-          select: {
-            shops: true,
-            savedOffers: true,
-            offerClaims: true,
-          },
+          select: { shops: true, savedOffers: true, offerClaims: true },
         },
       },
     });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    res
+      .status(200)
+      .json({
+        success: true,
+        user: { ...user, isActive: user.status === "ACTIVE" },
       });
-    }
-
-    return res.status(200).json({
-      success: true,
-      user: {
-        ...user,
-        isActive: user.status === "ACTIVE",
-      },
-    });
   } catch (error) {
-    console.error("Error fetching profile:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const updateAdminProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
     const { name, email, phone, city, address } = req.body;
-
     if (email) {
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          email,
-          NOT: { id: userId },
-        },
+      const existing = await prisma.user.findFirst({
+        where: { email, NOT: { id: req.user.id } },
       });
-
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: "Email already in use",
-        });
-      }
+      if (existing)
+        return res
+          .status(400)
+          .json({ success: false, message: "Email in use" });
     }
 
     const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: name || undefined,
-        email: email || undefined,
-        phone: phone || undefined,
-        city: city || undefined,
-        address: address || undefined,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        phone: true,
-        city: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      where: { id: req.user.id },
+      data: { name, email, phone, city, address },
+      select: userSelect,
     });
-
-    return res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      user: {
-        ...user,
-        isActive: user.status === "ACTIVE",
-      },
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Profile updated",
+        user: { ...user, isActive: user.status === "ACTIVE" },
+      });
   } catch (error) {
-    console.error("Error updating profile:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const updateAdminPassword = async (req, res) => {
   try {
-    const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res
+        .status(400)
+        .json({ success: false, message: "Both passwords required" });
+    if (newPassword.length < 6)
+      return res
+        .status(400)
+        .json({ success: false, message: "Password must be 6+ chars" });
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Current password and new password are required",
-      });
-    }
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "New password must be at least 6 characters long",
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    const isPasswordValid = await bcrypt.compare(
-      currentPassword,
-      user.password,
-    );
-    if (!isPasswordValid) {
-      return res.status(400).json({
-        success: false,
-        message: "Current password is incorrect",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid)
+      return res
+        .status(400)
+        .json({ success: false, message: "Current password incorrect" });
 
     await prisma.user.update({
-      where: { id: userId },
-      data: {
-        password: hashedPassword,
-      },
+      where: { id: req.user.id },
+      data: { password: await bcrypt.hash(newPassword, 10) },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Password updated successfully",
-    });
+    res.status(200).json({ success: true, message: "Password updated" });
   } catch (error) {
-    console.error("Error updating password:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ===============================
-// Export All Functions
-// ===============================
+// ================================
+// EXPORT
+// ================================
 module.exports = {
-  // Dashboard
   getDashboardStats,
   getTopCategories,
   getMonthlyGrowth,
   getRecentActivity,
-
-  // Reports
   getReports,
-
-  // Users
   getUsers,
   getUserById,
   updateUser,
   deleteUser,
   toggleUserStatus,
   restoreUser,
-
-  // Shops
   getShops,
   getShopStats,
   getShopById,
   createShop,
   updateShop,
   deleteShop,
-  // Shop Approval Functions
   getPendingShops,
   approveShop,
   rejectShop,
   bulkApproveShops,
   bulkRejectShops,
-
-  // Offers
   getOffers,
   getOfferById,
   createOffer,
   updateOffer,
   deleteOffer,
-
-  // Categories
   getCategories,
   getCategoryById,
   createCategory,
   updateCategory,
   deleteCategory,
-
-  // Admin Profile
   getAdminProfile,
   updateAdminProfile,
   updateAdminPassword,

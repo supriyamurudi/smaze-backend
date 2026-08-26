@@ -5,9 +5,64 @@ const prisma = require("../config/prisma");
 const WHATSAPP_CHANNEL_LINK = process.env.WHATSAPP_CHANNEL_LINK;
 const APP_URL = process.env.APP_URL || "https://smaze.com";
 
-// ===============================
+// ================================
+// HELPER: Create Notification for User
+// ================================
+const createUserNotification = async (userId, message, data = {}) => {
+  try {
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        message,
+        isRead: false,
+        type: data.type || "general",
+        link: data.link || null,
+        metadata: data.metadata || {},
+      },
+    });
+
+    // Log for debugging
+    console.log(
+      `📨 Notification created for user ${userId}: ${message.substring(0, 50)}...`,
+    );
+
+    return notification;
+  } catch (error) {
+    console.error("Error creating user notification:", error);
+    throw error;
+  }
+};
+
+// ================================
+// Helper: Create Notification for Multiple Users
+// ================================
+const createBulkUserNotifications = async (userIds, message, data = {}) => {
+  try {
+    const notifications = userIds.map((userId) => ({
+      userId,
+      message,
+      isRead: false,
+      type: data.type || "general",
+      link: data.link || null,
+      metadata: data.metadata || {},
+      createdAt: new Date(),
+    }));
+
+    const result = await prisma.notification.createMany({
+      data: notifications,
+    });
+
+    console.log(`📨 Bulk notifications created for ${result.count} users`);
+    return result;
+  } catch (error) {
+    console.error("Error creating bulk notifications:", error);
+    throw error;
+  }
+};
+
+// ================================
 // Generate WhatsApp Message (TEASER - no full details)
-// ===============================
+// ================================
 const generateWhatsAppMessage = (offer, shop) => {
   const offerUrl = `${APP_URL}/customer/offers/${offer.id}`;
 
@@ -25,9 +80,11 @@ const generateWhatsAppMessage = (offer, shop) => {
   return message;
 };
 
-// ===============================
+// ================================
+// CUSTOMER NOTIFICATIONS
+// ================================
+
 // Get User Notifications (Customer)
-// ===============================
 const getNotifications = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -63,9 +120,7 @@ const getNotifications = async (req, res) => {
   }
 };
 
-// ===============================
 // Get Unread Count (Customer)
-// ===============================
 const getUnreadCount = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -90,9 +145,7 @@ const getUnreadCount = async (req, res) => {
   }
 };
 
-// ===============================
 // Mark Notification as Read (Customer)
-// ===============================
 const markNotificationAsRead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -131,9 +184,7 @@ const markNotificationAsRead = async (req, res) => {
   }
 };
 
-// ===============================
 // Mark All Notifications as Read (Customer)
-// ===============================
 const markAllNotificationsAsRead = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -159,9 +210,7 @@ const markAllNotificationsAsRead = async (req, res) => {
   }
 };
 
-// ===============================
 // Delete Notification (Customer)
-// ===============================
 const deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
@@ -198,9 +247,7 @@ const deleteNotification = async (req, res) => {
   }
 };
 
-// ===============================
 // Delete All Notifications (Customer)
-// ===============================
 const deleteAllNotifications = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -222,13 +269,11 @@ const deleteAllNotifications = async (req, res) => {
   }
 };
 
-// =============================================
-// =========== ADMIN NOTIFICATIONS =============
-// =============================================
+// ================================
+// ADMIN NOTIFICATIONS
+// ================================
 
-// ===============================
 // Get Admin Notifications
-// ===============================
 const getAdminNotifications = async (req, res) => {
   try {
     const { limit = 50, page = 1, read, type } = req.query;
@@ -274,9 +319,7 @@ const getAdminNotifications = async (req, res) => {
   }
 };
 
-// ===============================
 // Get Admin Unread Count
-// ===============================
 const getAdminUnreadCount = async (req, res) => {
   try {
     const count = await prisma.adminNotification.count({
@@ -299,9 +342,7 @@ const getAdminUnreadCount = async (req, res) => {
   }
 };
 
-// ===============================
 // Mark Admin Notification as Read
-// ===============================
 const markAdminNotificationAsRead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -339,9 +380,7 @@ const markAdminNotificationAsRead = async (req, res) => {
   }
 };
 
-// ===============================
 // Mark All Admin Notifications as Read
-// ===============================
 const markAllAdminNotificationsAsRead = async (req, res) => {
   try {
     await prisma.adminNotification.updateMany({
@@ -365,9 +404,7 @@ const markAllAdminNotificationsAsRead = async (req, res) => {
   }
 };
 
-// ===============================
 // Delete Admin Notification
-// ===============================
 const deleteAdminNotification = async (req, res) => {
   try {
     const { id } = req.params;
@@ -403,9 +440,7 @@ const deleteAdminNotification = async (req, res) => {
   }
 };
 
-// ===============================
 // Delete All Admin Notifications
-// ===============================
 const deleteAllAdminNotifications = async (req, res) => {
   try {
     await prisma.adminNotification.deleteMany({
@@ -425,9 +460,7 @@ const deleteAllAdminNotifications = async (req, res) => {
   }
 };
 
-// ===============================
 // Create Admin Notification
-// ===============================
 const createAdminNotification = async (data) => {
   try {
     const notification = await prisma.adminNotification.create({
@@ -443,11 +476,12 @@ const createAdminNotification = async (data) => {
       },
     });
 
-    // Emit WebSocket event if available
+    // Emit WebSocket event if available (for future upgrade)
     if (global.io) {
       global.io.emit("admin_notification", notification);
     }
 
+    console.log(`📨 Admin notification created: ${data.title}`);
     return notification;
   } catch (error) {
     console.error("Error creating admin notification:", error);
@@ -455,9 +489,7 @@ const createAdminNotification = async (data) => {
   }
 };
 
-// ===============================
 // Admin: Send Notification to Shop Owner
-// ===============================
 const adminSendToShopOwner = async (req, res) => {
   try {
     const { shopOwnerId, title, body } = req.body;
@@ -469,12 +501,8 @@ const adminSendToShopOwner = async (req, res) => {
       });
     }
 
-    await prisma.notification.create({
-      data: {
-        userId: shopOwnerId,
-        message: `${title}: ${body}`,
-        isRead: false,
-      },
+    await createUserNotification(shopOwnerId, `${title}: ${body}`, {
+      type: "admin_message",
     });
 
     res.status(200).json({
@@ -490,9 +518,7 @@ const adminSendToShopOwner = async (req, res) => {
   }
 };
 
-// ===============================
 // Admin: Send Notification to All Shop Owners
-// ===============================
 const adminSendToAllShopOwners = async (req, res) => {
   try {
     const { title, body } = req.body;
@@ -509,15 +535,11 @@ const adminSendToAllShopOwners = async (req, res) => {
       select: { id: true },
     });
 
-    for (const owner of shopOwners) {
-      await prisma.notification.create({
-        data: {
-          userId: owner.id,
-          message: `${title}: ${body}`,
-          isRead: false,
-        },
-      });
-    }
+    const userIds = shopOwners.map((owner) => owner.id);
+
+    await createBulkUserNotifications(userIds, `${title}: ${body}`, {
+      type: "admin_message",
+    });
 
     res.status(200).json({
       success: true,
@@ -532,9 +554,7 @@ const adminSendToAllShopOwners = async (req, res) => {
   }
 };
 
-// ===============================
 // Send WhatsApp Notification for New Offer (Teaser Only)
-// ===============================
 const sendWhatsAppOfferNotification = async (offer, shop) => {
   try {
     // Get all customers who opted in for WhatsApp notifications
@@ -565,16 +585,17 @@ const sendWhatsAppOfferNotification = async (offer, shop) => {
     const message = generateWhatsAppMessage(offer, shop);
 
     // Create in-app notifications for all opted-in customers
-    const notifications = optedCustomers.map((customer) => ({
-      userId: customer.id,
-      message: `📱 New offer: ${offer.title} from ${shop.name}. Open the app to view details!`,
-      isRead: false,
-      createdAt: new Date(),
-    }));
+    const userIds = optedCustomers.map((c) => c.id);
 
-    await prisma.notification.createMany({
-      data: notifications,
-    });
+    await createBulkUserNotifications(
+      userIds,
+      `📱 New offer: ${offer.title} from ${shop.name}. Open the app to view details!`,
+      {
+        type: "offer",
+        link: `/customer/offers/${offer.id}`,
+        metadata: { offerId: offer.id, shopId: shop.id },
+      },
+    );
 
     // Create admin notification
     await createAdminNotification({
@@ -605,16 +626,16 @@ const sendWhatsAppOfferNotification = async (offer, shop) => {
   }
 };
 
-// ===============================
-// Trigger Admin Notification on Events
-// ===============================
+// ================================
+// TRIGGER FUNCTIONS
+// ================================
 
 // When a new user registers
 const triggerUserRegistered = async (user) => {
   await createAdminNotification({
     title: "👤 New User Registered",
     message: `${user.name || "A new user"} (${user.email}) has registered on the platform`,
-    type: "user",
+    type: "user_registered",
     link: `/admin/users/${user.id}`,
     priority: "normal",
   });
@@ -625,7 +646,7 @@ const triggerShopCreated = async (shop) => {
   await createAdminNotification({
     title: "🏪 New Shop Listed",
     message: `"${shop.name}" has been listed by ${shop.owner?.name || "a shop owner"}`,
-    type: "shop",
+    type: "shop_created",
     link: `/admin/shops/${shop.id}`,
     priority: "normal",
   });
@@ -636,15 +657,83 @@ const triggerOfferCreated = async (offer, shop) => {
   await createAdminNotification({
     title: "🏷️ New Offer Created",
     message: `"${offer.title}" (${offer.discount}% OFF) created by "${shop?.name || "a shop"}"`,
-    type: "offer",
+    type: "offer_created",
     link: `/admin/offers/${offer.id}`,
     priority: "normal",
   });
 };
 
-// ===============================
+// 🆕 When shop is approved
+const triggerShopApproved = async (shop) => {
+  // Admin notification
+  await createAdminNotification({
+    title: "✅ Shop Approved",
+    message: `"${shop.name}" has been approved and is now active`,
+    type: "shop",
+    link: `/admin/shops/${shop.id}`,
+    priority: "normal",
+  });
+
+  // Notify shop owner
+  if (shop.ownerId) {
+    await createUserNotification(
+      shop.ownerId,
+      `🎉 Your shop "${shop.name}" has been approved by admin!`,
+      {
+        type: "shop_approved",
+        link: `/shop/dashboard`,
+      },
+    );
+  }
+};
+
+// 🆕 When shop is rejected
+const triggerShopRejected = async (shop, reason) => {
+  // Admin notification
+  await createAdminNotification({
+    title: "❌ Shop Rejected",
+    message: `"${shop.name}" was rejected. Reason: ${reason || "No reason provided"}`,
+    type: "shop",
+    link: `/admin/shops/${shop.id}`,
+    priority: "high",
+  });
+
+  // Notify shop owner
+  if (shop.ownerId) {
+    await createUserNotification(
+      shop.ownerId,
+      `❌ Your shop "${shop.name}" was rejected. Reason: ${reason || "No reason provided"}`,
+      {
+        type: "shop_rejected",
+        link: `/shop/dashboard`,
+      },
+    );
+  }
+};
+
+// 🆕 When user status changes
+const triggerUserStatusChanged = async (user, newStatus) => {
+  await createAdminNotification({
+    title: "👤 User Status Changed",
+    message: `${user.name} (${user.email}) was ${newStatus === "ACTIVE" ? "activated" : "blocked"}`,
+    type: "user",
+    link: `/admin/users/${user.id}`,
+    priority: "normal",
+  });
+
+  // Notify the user
+  await createUserNotification(
+    user.id,
+    `Your account has been ${newStatus === "ACTIVE" ? "activated" : "blocked"}`,
+    {
+      type: "user_status",
+    },
+  );
+};
+
+// ================================
 // EXPORTS
-// ===============================
+// ================================
 module.exports = {
   // Customer notifications
   getNotifications,
@@ -672,4 +761,7 @@ module.exports = {
   triggerUserRegistered,
   triggerShopCreated,
   triggerOfferCreated,
+  triggerShopApproved, // 🆕
+  triggerShopRejected, // 🆕
+  triggerUserStatusChanged, // 🆕
 };
