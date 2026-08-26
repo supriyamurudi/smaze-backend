@@ -2,6 +2,9 @@ const prisma = require("../config/prisma");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
 
+// ✅ Import the notification helper function
+const { createBulkUserNotifications } = require("./notificationController");
+
 // ===============================
 // Add Category
 // ===============================
@@ -48,6 +51,41 @@ const addCategory = async (req, res) => {
         image,
       },
     });
+
+    // ==========================================
+    // ✅ NEW CODE: Send notification to all users
+    // ==========================================
+    try {
+      // 1. Get all valid, active user IDs from the database
+      const allUsers = await prisma.user.findMany({
+        select: { id: true },
+        // Optional: Only send to active users
+        where: { status: "ACTIVE" },
+      });
+
+      if (allUsers.length > 0) {
+        // 2. Map their IDs into an array of strings
+        const userIds = allUsers.map((user) => user.id);
+
+        // 3. Call the helper function to create bulk notifications
+        await createBulkUserNotifications(
+          userIds,
+          "New Category Added: New Category Added you can check it and add offers on that.",
+          {
+            type: "admin_message",
+            link: null,
+            metadata: {},
+          },
+        );
+      }
+    } catch (notificationError) {
+      // This will log the error but NOT crash the category creation
+      console.error(
+        "Failed to send notifications for new category:",
+        notificationError,
+      );
+    }
+    // ==========================================
 
     return res.status(201).json({
       success: true,
