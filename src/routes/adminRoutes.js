@@ -1,4 +1,4 @@
-// backend/routes/adminRoutes.js
+// backend/src/routes/adminRoutes.js
 const express = require("express");
 const upload = require("../middleware/upload");
 
