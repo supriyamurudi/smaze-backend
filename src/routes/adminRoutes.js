@@ -40,7 +40,7 @@ const {
   updateAdminPassword,
 } = require("../controllers/adminController");
 
-// ✅ IMPORT NOTIFICATION CONTROLLERS
+// ✅ ADD THIS IMPORT
 const {
   getAdminNotifications,
   getAdminUnreadCount,
@@ -58,7 +58,7 @@ const router = express.Router();
 // ✅ NOTIFICATION ROUTES - ADD THESE
 // =========================
 
-// Get all admin notifications (with filters)
+// Get all admin notifications
 router.get(
   "/notifications",
   protect,
