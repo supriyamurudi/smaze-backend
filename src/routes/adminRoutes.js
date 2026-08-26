@@ -1,7 +1,6 @@
 // backend/routes/adminRoutes.js
-
 const express = require("express");
-const upload = require("../middleware/upload"); // ✅ Import upload middleware
+const upload = require("../middleware/upload");
 
 const {
   getDashboardStats,
@@ -18,7 +17,6 @@ const {
   createShop,
   updateShop,
   deleteShop,
-  // ✅ Import shop approval functions
   getPendingShops,
   approveShop,
   rejectShop,
@@ -42,9 +40,71 @@ const {
   updateAdminPassword,
 } = require("../controllers/adminController");
 
+// ✅ IMPORT NOTIFICATION CONTROLLERS
+const {
+  getAdminNotifications,
+  getAdminUnreadCount,
+  markAdminNotificationAsRead,
+  markAllAdminNotificationsAsRead,
+  deleteAdminNotification,
+  deleteAllAdminNotifications,
+} = require("../controllers/notificationController");
+
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+// =========================
+// ✅ NOTIFICATION ROUTES - ADD THESE
+// =========================
+
+// Get all admin notifications (with filters)
+router.get(
+  "/notifications",
+  protect,
+  authorize("ADMIN"),
+  getAdminNotifications,
+);
+
+// Get admin unread count
+router.get(
+  "/notifications/unread-count",
+  protect,
+  authorize("ADMIN"),
+  getAdminUnreadCount,
+);
+
+// Mark admin notification as read
+router.patch(
+  "/notifications/:id/read",
+  protect,
+  authorize("ADMIN"),
+  markAdminNotificationAsRead,
+);
+
+// Mark all admin notifications as read
+router.patch(
+  "/notifications/mark-all-read",
+  protect,
+  authorize("ADMIN"),
+  markAllAdminNotificationsAsRead,
+);
+
+// Delete admin notification
+router.delete(
+  "/notifications/:id",
+  protect,
+  authorize("ADMIN"),
+  deleteAdminNotification,
+);
+
+// Delete all admin notifications
+router.delete(
+  "/notifications/delete-all",
+  protect,
+  authorize("ADMIN"),
+  deleteAllAdminNotifications,
+);
 
 // =========================
 // Dashboard Routes
@@ -74,8 +134,6 @@ router.put("/users/:id/restore", protect, authorize("ADMIN"), restoreUser);
 // =========================
 router.get("/shops", protect, authorize("ADMIN"), getShops);
 router.get("/shops/stats", protect, authorize("ADMIN"), getShopStats);
-
-// ✅ NEW: Shop Approval Routes
 router.get("/shops/pending", protect, authorize("ADMIN"), getPendingShops);
 router.patch("/shops/:id/approve", protect, authorize("ADMIN"), approveShop);
 router.patch("/shops/:id/reject", protect, authorize("ADMIN"), rejectShop);
@@ -86,8 +144,6 @@ router.post(
   bulkApproveShops,
 );
 router.post("/shops/bulk-reject", protect, authorize("ADMIN"), bulkRejectShops);
-
-// Shop CRUD Routes
 router.get("/shops/:id", protect, authorize("ADMIN"), getShopById);
 router.post(
   "/shops",
