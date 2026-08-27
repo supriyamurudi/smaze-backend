@@ -10,19 +10,15 @@ const getHomeStats = async (req, res) => {
       [
         prisma.shop.count({
           where: {
-            status: {
-              equals: "active", // ✅ Case-insensitive
-              mode: "insensitive",
-            },
+            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
+            status: "active",
           },
         }),
         prisma.user.count({
           where: {
             role: "CUSTOMER",
-            status: {
-              equals: "ACTIVE", // ✅ Case-insensitive
-              mode: "insensitive",
-            },
+            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
+            status: "active",
           },
         }),
         prisma.offer.count({
@@ -70,10 +66,8 @@ const getHomeData = async (req, res) => {
       }),
       prisma.shop.findMany({
         where: {
-          status: {
-            equals: "active", // ✅ Case-insensitive
-            mode: "insensitive",
-          },
+          // ✅ USE THIS EXACT VALUE (Lowercase to match database)
+          status: "active",
         },
         take: 6,
         include: { category: true },
@@ -82,19 +76,15 @@ const getHomeData = async (req, res) => {
       prisma.$transaction([
         prisma.shop.count({
           where: {
-            status: {
-              equals: "active", // ✅ Case-insensitive
-              mode: "insensitive",
-            },
+            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
+            status: "active",
           },
         }),
         prisma.user.count({
           where: {
             role: "CUSTOMER",
-            status: {
-              equals: "ACTIVE", // ✅ Case-insensitive
-              mode: "insensitive",
-            },
+            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
+            status: "active",
           },
         }),
         prisma.offer.count({
