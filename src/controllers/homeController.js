@@ -10,13 +10,19 @@ const getHomeStats = async (req, res) => {
       [
         prisma.shop.count({
           where: {
-            status: "active", // Only approved shops
+            status: {
+              equals: "active", // ✅ Case-insensitive
+              mode: "insensitive",
+            },
           },
         }),
         prisma.user.count({
           where: {
             role: "CUSTOMER",
-            status: "ACTIVE",
+            status: {
+              equals: "ACTIVE", // ✅ Case-insensitive
+              mode: "insensitive",
+            },
           },
         }),
         prisma.offer.count({
@@ -63,15 +69,37 @@ const getHomeData = async (req, res) => {
         orderBy: { views: "desc" },
       }),
       prisma.shop.findMany({
-        where: { status: "ACTIVE" },
+        where: {
+          status: {
+            equals: "active", // ✅ Case-insensitive
+            mode: "insensitive",
+          },
+        },
         take: 6,
         include: { category: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.$transaction([
-        prisma.shop.count({ where: { status: "ACTIVE" } }),
-        prisma.user.count({ where: { role: "CUSTOMER", status: "ACTIVE" } }),
-        prisma.offer.count({ where: { endDate: { gte: new Date() } } }),
+        prisma.shop.count({
+          where: {
+            status: {
+              equals: "active", // ✅ Case-insensitive
+              mode: "insensitive",
+            },
+          },
+        }),
+        prisma.user.count({
+          where: {
+            role: "CUSTOMER",
+            status: {
+              equals: "ACTIVE", // ✅ Case-insensitive
+              mode: "insensitive",
+            },
+          },
+        }),
+        prisma.offer.count({
+          where: { endDate: { gte: new Date() } },
+        }),
       ]),
     ]);
 
