@@ -10,7 +10,7 @@ const getHomeStats = async (req, res) => {
       [
         prisma.shop.count({
           where: {
-            status: "ACTIVE", // Only approved shops
+            status: "active", // Only approved shops
           },
         }),
         prisma.user.count({
