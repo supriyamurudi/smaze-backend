@@ -56,6 +56,9 @@ model User {
   // ✅ NEW: Add this relation for Feedback
   websiteFeedback WebsiteFeedback[]
 
+  // ✅ NEW: Add this relation for Shop Ratings
+  shopRatings ShopRating[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -92,6 +95,9 @@ model Shop {
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [categoryId], references: [id])
   offers   Offer[]
+
+  // ✅ NEW: Add this relation for Shop Ratings
+  shopRatings ShopRating[]
 
   @@index([status])
   @@index([ownerId])
@@ -207,14 +213,32 @@ model WebsiteFeedback {
   id        Int      @id @default(autoincrement())
   userId    String
   message   String
-  isPublic  Boolean  @default(false) // ✅ Admin must approve this to show on website
+  rating    Int      @default(5) // ✅ ADD THIS (1-5 stars)
+  isPublic  Boolean  @default(false) 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ============================================
+// ✅ NEW: SHOP RATING MODEL
+// ============================================
+model ShopRating {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  shopId    Int
+  rating    Int      // 1 to 5 stars
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shopId]) // ✅ One rating per user per shop
+  @@index([shopId])
+}
 
 // ============================================
 // OFFER CLAIM MODEL

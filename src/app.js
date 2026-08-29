@@ -23,6 +23,8 @@ const homeRoutes = require("./routes/homeRoutes");
 // ✅ ADD THIS - Feedback Routes
 const feedbackRoutes = require("./routes/feedbackRoutes");
 
+const ratingRoutes = require("./routes/ratingRoutes");
+
 // =========================
 // Middleware Imports
 // =========================
@@ -130,6 +132,7 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/ratings", ratingRoutes);
 
 // =========================
 // Profile Route

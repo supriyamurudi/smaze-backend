@@ -3,7 +3,7 @@ const prisma = require("../config/prisma");
 // ✅ Submit Website Feedback (Customer -> Admin)
 const submitWebsiteFeedback = async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, rating } = req.body;
 
     if (!message || message.trim() === "") {
       return res.status(400).json({
@@ -16,6 +16,7 @@ const submitWebsiteFeedback = async (req, res) => {
       data: {
         userId: req.user.id,
         message: message.trim(),
+        rating: rating ? Number(rating) : 5, // ✅ Default to 5 if not provided
       },
     });
 
@@ -59,13 +60,11 @@ const getWebsiteFeedback = async (req, res) => {
   }
 };
 
-// ✅ NEW: Get Public Feedback (No login required)
+// ✅ Get Public Feedback (No login required - SHOWS ALL)
 const getPublicFeedback = async (req, res) => {
   try {
     const feedback = await prisma.websiteFeedback.findMany({
-      where: {
-        isPublic: true, // Only show feedback that admins have approved to show
-      },
+      // ❌ REMOVED the "where" filter so ALL feedback shows
       include: {
         user: {
           select: {
