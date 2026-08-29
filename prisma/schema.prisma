@@ -53,6 +53,9 @@ model User {
   offerViews    OfferView[]
   whatsAppClicks WhatsAppChannelClick[]
 
+  // ✅ NEW: Add this relation for Feedback
+  websiteFeedback WebsiteFeedback[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -194,6 +197,22 @@ model AdminNotification {
   @@index([isRead])
   @@index([type])
   @@index([priority])
+  @@index([createdAt])
+}
+
+// ============================================
+// ✅ NEW: WEBSITE FEEDBACK MODEL
+// ============================================
+model WebsiteFeedback {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([createdAt])
 }
 
