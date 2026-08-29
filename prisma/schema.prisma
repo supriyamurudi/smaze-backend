@@ -42,7 +42,8 @@ model User {
 
   role Role @default(CUSTOMER)
 
-  status    UserStatus @default(ACTIVE)
+  // ✅ FIXED: Use "ACTIVE" to match your database
+  status    String   @default("ACTIVE")
   deletedAt DateTime?
 
   shops         Shop[]
@@ -250,11 +251,7 @@ enum ClaimStatus {
   EXPIRED
 }
 
-enum UserStatus {
-  ACTIVE
-  BLOCKED
-  DELETED
-}
+// Note: UserStatus enum is removed since User.status is now a String
 
 // ============================================
 // WHATSAPP CHANNEL MODELS

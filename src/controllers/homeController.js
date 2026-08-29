@@ -10,22 +10,26 @@ const getHomeStats = async (req, res) => {
       [
         prisma.shop.count({
           where: {
-            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
             status: "active",
           },
         }),
+        // ✅ FIXED: Allows "ACTIVE" and "active" to be counted
         prisma.user.count({
           where: {
             role: "CUSTOMER",
-            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
-            status: "active",
+            status: {
+              equals: "ACTIVE",
+              mode: "insensitive",
+            },
           },
         }),
+        // ✅ FIXED: Counts all offers (including ones with no endDate)
         prisma.offer.count({
           where: {
-            endDate: {
-              gte: new Date(),
-            },
+            OR: [
+              { endDate: { gte: new Date() } }, // Future offers
+              { endDate: null }, // Offers with no expiry
+            ],
           },
         }),
       ],
@@ -59,14 +63,15 @@ const getHomeData = async (req, res) => {
         orderBy: { createdAt: "desc" },
       }),
       prisma.offer.findMany({
-        where: { endDate: { gte: new Date() } },
+        where: {
+          OR: [{ endDate: { gte: new Date() } }, { endDate: null }],
+        },
         take: 6,
         include: { shop: true, category: true },
         orderBy: { views: "desc" },
       }),
       prisma.shop.findMany({
         where: {
-          // ✅ USE THIS EXACT VALUE (Lowercase to match database)
           status: "active",
         },
         take: 6,
@@ -76,19 +81,23 @@ const getHomeData = async (req, res) => {
       prisma.$transaction([
         prisma.shop.count({
           where: {
-            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
             status: "active",
           },
         }),
+        // ✅ FIXED: Allows "ACTIVE" and "active" to be counted
         prisma.user.count({
           where: {
             role: "CUSTOMER",
-            // ✅ USE THIS EXACT VALUE (Lowercase to match database)
-            status: "active",
+            status: {
+              equals: "ACTIVE",
+              mode: "insensitive",
+            },
           },
         }),
         prisma.offer.count({
-          where: { endDate: { gte: new Date() } },
+          where: {
+            OR: [{ endDate: { gte: new Date() } }, { endDate: null }],
+          },
         }),
       ]),
     ]);
