@@ -121,8 +121,57 @@ const getMyShopRating = async (req, res) => {
   }
 };
 
+// ✅ NEW: Get All Ratings for the Shop Owner's Own Shop
+const getMyShopRatings = async (req, res) => {
+  try {
+    // Find the shop belonging to the logged-in owner
+    const shop = await prisma.shop.findFirst({
+      where: { ownerId: req.user.id },
+    });
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found",
+      });
+    }
+
+    const ratings = await prisma.shopRating.findMany({
+      where: { shopId: shop.id },
+      include: {
+        user: {
+          select: {
+            name: true,
+            image: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Calculate average rating
+    const averageRating =
+      ratings.length > 0
+        ? ratings.reduce((sum, item) => sum + item.rating, 0) / ratings.length
+        : 0;
+
+    res.json({
+      success: true,
+      ratings,
+      averageRating: Math.round(averageRating * 10) / 10,
+      totalRatings: ratings.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   submitRating,
   getShopRatings,
   getMyShopRating,
+  getMyShopRatings, // ✅ Export this
 };
