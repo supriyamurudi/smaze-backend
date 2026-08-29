@@ -207,15 +207,12 @@ model WebsiteFeedback {
   id        Int      @id @default(autoincrement())
   userId    String
   message   String
+  isPublic  Boolean  @default(false) // ✅ Admin must approve this to show on website
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([createdAt])
 }
-
 
 
 

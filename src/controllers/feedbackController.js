@@ -59,7 +59,39 @@ const getWebsiteFeedback = async (req, res) => {
   }
 };
 
+// ✅ NEW: Get Public Feedback (No login required)
+const getPublicFeedback = async (req, res) => {
+  try {
+    const feedback = await prisma.websiteFeedback.findMany({
+      where: {
+        isPublic: true, // Only show feedback that admins have approved to show
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 6, // Only show the latest 6
+    });
+
+    res.json({
+      success: true,
+      feedback,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   submitWebsiteFeedback,
   getWebsiteFeedback,
+  getPublicFeedback, // ✅ Export this
 };
