@@ -399,6 +399,9 @@ const getShopDashboard = async (req, res) => {
 // ================================
 // GET FEATURED SHOPS (PUBLIC)
 // ================================
+// ================================
+// GET FEATURED SHOPS (PUBLIC)
+// ================================
 const getFeaturedShops = async (req, res) => {
   try {
     const shops = await prisma.shop.findMany({
@@ -421,17 +424,34 @@ const getFeaturedShops = async (req, res) => {
             offers: {
               where: { endDate: { gte: new Date() } },
             },
+            ratings: true, // ✅ Count the number of ratings
           },
+        },
+        ratings: {
+          select: { rating: true }, // ✅ Fetch the actual rating numbers
         },
       },
       orderBy: { createdAt: "desc" },
       take: 6,
     });
 
-    const shopsWithRating = shops.map((shop) => ({
-      ...shop,
-      rating: 4.5,
-    }));
+    // ✅ Calculate the real average rating from the database
+    const shopsWithRating = shops.map((shop) => {
+      const totalRatings = shop.ratings.length;
+      const averageRating =
+        totalRatings > 0
+          ? shop.ratings.reduce((sum, item) => sum + item.rating, 0) /
+            totalRatings
+          : 0;
+
+      // Return the shop data with real ratings, and remove the raw ratings array
+      return {
+        ...shop,
+        rating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
+        totalRatings: totalRatings,
+        ratings: undefined, // Clean up the response payload
+      };
+    });
 
     return res.status(200).json({
       success: true,
