@@ -1,17 +1,16 @@
-// Inside your login function, replace the token response:
-const token = generateToken(user);
+const jwt = require("jsonwebtoken");
 
-// Set the cookie (HttpOnly, Secure, 30 days)
-res.cookie("token", token, {
-  httpOnly: true, // Cannot be read by JavaScript (prevents XSS)
-  secure: true, // Only sent over HTTPS (Production)
-  sameSite: "strict",
-  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-});
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user.id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "30d", // Change from "7d" to "30d" or "365d" for long-lasting login
+    },
+  );
+};
 
-res.status(200).json({
-  success: true,
-  message: "Login successful",
-  user: userResponse,
-  // Remove "token" from this JSON response!
-});
+module.exports = generateToken;
