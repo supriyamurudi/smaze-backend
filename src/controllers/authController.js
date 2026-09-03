@@ -157,11 +157,12 @@ const login = async (req, res) => {
 
     const token = generateToken(user);
 
-    // ✅ SET HTTPONLY COOKIE
+    // ✅ FIXED: SET HTTPONLY COOKIE (Matches register exactly)
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
-      sameSite: "strict",
+      sameSite: "none", // ✅ MUST be "none" for cross-domain
+      domain: ".smaze.in", // ✅ MUST include domain for cross-domain
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
@@ -182,7 +183,12 @@ const login = async (req, res) => {
 
 // ================= LOGOUT =================
 const logout = async (req, res) => {
-  res.clearCookie("token");
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    domain: ".smaze.in", // ✅ Clear it properly
+  });
   res.status(200).json({
     success: true,
     message: "Logged out successfully",
