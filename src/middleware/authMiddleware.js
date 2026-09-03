@@ -10,7 +10,12 @@ const protect = async (req, res, next) => {
   try {
     let token;
 
-    if (
+    // ✅ 1. READ FROM HTTPONLY COOKIE FIRST (NEW!)
+    if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+    // ✅ 2. FALLBACK: Read from Authorization header (for old requests)
+    else if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer ")
     ) {
