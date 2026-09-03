@@ -2,7 +2,8 @@
 const bcrypt = require("bcrypt");
 const prisma = require("../config/prisma");
 const generateToken = require("../utils/generateToken");
-// ✅ ADD THIS IMPORT
+const jwt = require("jsonwebtoken"); // ✅ ADD THIS (for checkAuth)
+
 const { triggerUserRegistered } = require("./notificationController");
 
 // ================= REGISTER USER =================
@@ -49,15 +50,21 @@ const register = async (req, res) => {
       console.log("✅ Admin notification created for user:", user.email);
     } catch (notifError) {
       console.error("❌ Failed to create admin notification:", notifError);
-      // Don't fail the request if notification fails
     }
 
     const token = generateToken(user);
 
+    // ✅ SET HTTPONLY COOKIE
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
     res.status(201).json({
       success: true,
       message: "Registration successful",
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -149,11 +156,19 @@ const login = async (req, res) => {
 
     const token = generateToken(user);
 
+    // ✅ SET HTTPONLY COOKIE
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
     res.status(200).json({
       success: true,
       message: "Login successful",
-      token,
       user: userResponse,
+      // ❌ token REMOVED - Cookie handles it now
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -161,6 +176,41 @@ const login = async (req, res) => {
       success: false,
       message: error.message || "Login failed. Please try again.",
     });
+  }
+};
+
+// ================= LOGOUT =================
+const logout = async (req, res) => {
+  res.clearCookie("token");
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
+};
+
+// ================= CHECK AUTH (USED BY FRONTEND) =================
+const checkAuth = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ success: false });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+
+    if (!user) return res.status(401).json({ success: false });
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    res.status(401).json({ success: false });
   }
 };
 
@@ -318,7 +368,6 @@ const resetPassword = async (req, res) => {
   try {
     const { email, newPassword, confirmPassword } = req.body;
 
-    // Validate input
     if (!email || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -340,7 +389,6 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Find user by email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -352,10 +400,8 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update password
     await prisma.user.update({
       where: { id: user.id },
       data: { password: hashedPassword },
@@ -379,8 +425,10 @@ const resetPassword = async (req, res) => {
 module.exports = {
   register,
   login,
+  logout, // ✅ ADDED
+  checkAuth, // ✅ ADDED
   getProfile,
   updateProfile,
   changePassword,
-  resetPassword, // Simple reset password (no email verification)
+  resetPassword,
 };

@@ -1,6 +1,7 @@
 // backend/src/app.js
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser"); // ✅ ADD THIS IMPORT
 
 // =========================
 // Route Imports
@@ -95,6 +96,9 @@ app.use((req, res, next) => {
 // ✅ Body Parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ COOKIE PARSER (MUST BE ADDED HERE)
+app.use(cookieParser());
 
 // =========================
 // Home Route

@@ -4,6 +4,8 @@ const express = require("express");
 const {
   register,
   login,
+  logout, // ✅ ADDED
+  checkAuth, // ✅ ADDED
   getProfile,
   updateProfile,
   changePassword,
@@ -21,6 +23,12 @@ router.post("/register", register);
 
 // Login
 router.post("/login", login);
+
+// Logout
+router.post("/logout", logout); // ✅ ADDED
+
+// Check if current user is authenticated (used by frontend RequireAuth)
+router.get("/check", checkAuth); // ✅ ADDED
 
 // ================= PASSWORD RESET (SIMPLE - NO EMAIL) =================
 
