@@ -2,7 +2,7 @@
 const bcrypt = require("bcrypt");
 const prisma = require("../config/prisma");
 const generateToken = require("../utils/generateToken");
-const jwt = require("jsonwebtoken"); // ✅ ADD THIS (for checkAuth)
+const jwt = require("jsonwebtoken");
 
 const { triggerUserRegistered } = require("./notificationController");
 
@@ -43,7 +43,6 @@ const register = async (req, res) => {
       },
     });
 
-    // ✅ TRIGGER ADMIN NOTIFICATION - New user registered
     try {
       console.log("🔔 Creating admin notification for new user:", user.email);
       await triggerUserRegistered(user);
@@ -54,7 +53,7 @@ const register = async (req, res) => {
 
     const token = generateToken(user);
 
-    // ✅ SET HTTPONLY COOKIE
+    // ✅ SET HTTPONLY COOKIE (NO domain attribute!)
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
@@ -156,12 +155,11 @@ const login = async (req, res) => {
 
     const token = generateToken(user);
 
-    // ✅ FIXED: SET HTTPONLY COOKIE (Matches register exactly)
+    // ✅ FIXED: SET HTTPONLY COOKIE (NO domain attribute!)
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
-      sameSite: "none", // ✅ MUST be "none" for cross-domain
-      domain: ".smaze.in", // ✅ MUST include domain for cross-domain
+      sameSite: "none",
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
@@ -169,7 +167,6 @@ const login = async (req, res) => {
       success: true,
       message: "Login successful",
       user: userResponse,
-      // ❌ token REMOVED - Cookie handles it now
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -182,11 +179,12 @@ const login = async (req, res) => {
 
 // ================= LOGOUT =================
 const logout = async (req, res) => {
+  // ✅ FIXED: Clear the cookie with the EXACT SAME settings used in login (NO domain!)
   res.clearCookie("token", {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    domain: ".smaze.in", // ✅ Clear it properly
+    path: "/",
   });
   res.status(200).json({
     success: true,
@@ -369,7 +367,7 @@ const changePassword = async (req, res) => {
   }
 };
 
-// ================= RESET PASSWORD (SIMPLE - NO EMAIL VERIFICATION) =================
+// ================= RESET PASSWORD =================
 const resetPassword = async (req, res) => {
   try {
     const { email, newPassword, confirmPassword } = req.body;
@@ -431,8 +429,8 @@ const resetPassword = async (req, res) => {
 module.exports = {
   register,
   login,
-  logout, // ✅ ADDED
-  checkAuth, // ✅ ADDED
+  logout,
+  checkAuth,
   getProfile,
   updateProfile,
   changePassword,
